@@ -12,8 +12,15 @@ from pathlib import PurePath, PureWindowsPath
 
 from sqlmodel import Session, select
 
-from reelwright.db.models import VIDEO_KINDS, Asset, AssetKind, AssetManifest, AssetRead
-from reelwright.ingest import proxy
+from reelwright.db.models import (
+    TRANSCRIBE_KINDS,
+    VIDEO_KINDS,
+    Asset,
+    AssetKind,
+    AssetManifest,
+    AssetRead,
+)
+from reelwright.ingest import proxy, transcript
 
 AUDIO_EXTS = frozenset({".wav", ".mp3", ".m4a", ".aac", ".flac"})
 VIDEO_EXTS = frozenset({".mp4", ".mov", ".mkv", ".avi", ".lrf"})
@@ -48,7 +55,7 @@ def classify_kind(
 
 
 def ingest_manifest(session: Session, manifest: AssetManifest) -> list[Asset]:
-    """Upsert one Asset per entry and queue a proxy for video without one."""
+    """Upsert one Asset per entry; queue a proxy for video and a transcript for camera/screen."""
     out: list[Asset] = []
     for entry in manifest.entries:
         asset = session.exec(select(Asset).where(Asset.checksum == entry.checksum)).first()
@@ -56,10 +63,12 @@ def ingest_manifest(session: Session, manifest: AssetManifest) -> list[Asset]:
             select(Asset).where(Asset.host == entry.host, Asset.path == entry.path)
         ).first()
         if asset is None and same_path is not None:
-            # The file at this path was replaced: new content, so a new proxy.
+            # The file at this path was replaced: new content, so a new proxy and transcript.
             asset = same_path
             asset.proxy_path = None
             asset.proxy_job_id = None
+            asset.transcript_id = None
+            asset.transcript_job_id = None
         elif asset is not None and same_path is not None and same_path.id != asset.id:
             session.delete(same_path)
             session.flush()
@@ -76,6 +85,12 @@ def ingest_manifest(session: Session, manifest: AssetManifest) -> list[Asset]:
         session.refresh(asset)
         if AssetKind(asset.kind) in VIDEO_KINDS and not asset.proxy_path and not asset.proxy_job_id:
             proxy.enqueue_proxy(session, asset)
+        if (
+            AssetKind(asset.kind) in TRANSCRIBE_KINDS
+            and not asset.transcript_id
+            and not asset.transcript_job_id
+        ):
+            transcript.enqueue_transcribe(session, asset)
         out.append(asset)
     return out
 
@@ -92,5 +107,7 @@ def asset_to_read(asset: Asset) -> AssetRead:
         duration_s=asset.duration_s,
         proxy_path=asset.proxy_path,
         proxy_job_id=asset.proxy_job_id,
+        transcript_id=asset.transcript_id,
+        transcript_job_id=asset.transcript_job_id,
         created_at=asset.created_at,
     )

@@ -12,7 +12,9 @@ from reelwright.db.session import alembic_config, get_engine, migrate
 def test_migrate_creates_project_table(tmp_db: str) -> None:
     migrate()
     engine = get_engine()
-    assert {"project", "worker", "renderjob", "asset"} <= set(inspect(engine).get_table_names())
+    assert {"project", "worker", "renderjob", "asset", "transcript"} <= set(
+        inspect(engine).get_table_names()
+    )
     heads = ScriptDirectory.from_config(alembic_config()).get_heads()
     assert len(heads) == 1, f"multiple migration heads: {heads}"
     with engine.connect() as conn:
