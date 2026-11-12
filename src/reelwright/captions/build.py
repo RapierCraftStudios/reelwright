@@ -36,7 +36,7 @@ class CaptionWord:
 
 
 @dataclass
-class Cue:
+class CaptionCue:
     start: float
     end: float
     lines: list[str] = field(default_factory=list)
@@ -105,11 +105,11 @@ def _split_long(word: CaptionWord, limit: int) -> list[CaptionWord]:
     ]
 
 
-def cues(words: Iterable[CaptionWord], style: CaptionStyle) -> list[Cue]:
+def cues(words: Iterable[CaptionWord], style: CaptionStyle) -> list[CaptionCue]:
     """Pack words into cues of at most style.max_lines lines of at most style.max_chars."""
     limit = style.max_chars
-    out: list[Cue] = []
-    cur: Cue | None = None
+    out: list[CaptionCue] = []
+    cur: CaptionCue | None = None
     for original in words:
         for word in _split_long(original, limit):
             if cur is not None and word.start - cur.words[-1].end > style.max_gap_s:
@@ -125,7 +125,7 @@ def cues(words: Iterable[CaptionWord], style: CaptionStyle) -> list[Cue]:
                 else:
                     cur = None
             if cur is None:
-                cur = Cue(word.start, word.end, [word.text], [], [1])
+                cur = CaptionCue(word.start, word.end, [word.text], [], [1])
                 out.append(cur)
             cur.words.append(word)
             cur.end = max(cur.end, word.end)
@@ -149,7 +149,7 @@ def _clock(t: float, sep: str) -> str:
     return f"{h:02d}:{m:02d}:{s:02d}{sep}{ms:03d}"
 
 
-def to_srt(items: Sequence[Cue]) -> str:
+def to_srt(items: Sequence[CaptionCue]) -> str:
     blocks = [
         f"{n}\n{_clock(c.start, ',')} --> {_clock(c.end, ',')}\n" + "\n".join(c.lines)
         for n, c in enumerate(items, start=1)
@@ -157,7 +157,7 @@ def to_srt(items: Sequence[Cue]) -> str:
     return "\n\n".join(blocks) + ("\n" if blocks else "")
 
 
-def to_vtt(items: Sequence[Cue]) -> str:
+def to_vtt(items: Sequence[CaptionCue]) -> str:
     blocks = [
         f"{_clock(c.start, '.')} --> {_clock(c.end, '.')}\n" + "\n".join(c.lines) for c in items
     ]
@@ -187,8 +187,8 @@ def _ass_escape(text: str) -> str:
     return text.replace("\\", "\\\\").replace("{", "(").replace("}", ")")
 
 
-def _karaoke(cue: Cue) -> str:
-    """Cue text with a {\\k} per word; tags sum to the cue's length in centiseconds."""
+def _karaoke(cue: CaptionCue) -> str:
+    """CaptionCue text with a {\\k} per word; tags sum to the cue's length in centiseconds."""
     marks = [_cs(w.start) for w in cue.words[1:]] + [_cs(cue.end)]
     at = _cs(cue.start)
     words = iter(cue.words)
@@ -205,7 +205,7 @@ def _karaoke(cue: Cue) -> str:
     return "\\N".join(rendered)
 
 
-def to_ass(items: Sequence[Cue], style: CaptionStyle) -> str:
+def to_ass(items: Sequence[CaptionCue], style: CaptionStyle) -> str:
     """ASS script for burn-in: text sits inside the safe area and fills word by word.
 
     Words not yet spoken use the text colour (SecondaryColour); each turns the highlight
