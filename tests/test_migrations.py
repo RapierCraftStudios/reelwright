@@ -13,7 +13,7 @@ def test_migrate_creates_tables(tmp_db: str) -> None:
     migrate()
     engine = get_engine()
     tables = set(inspect(engine).get_table_names())
-    assert {"project", "worker", "renderjob", "scriptversion"} <= tables
+    assert {"project", "worker", "renderjob", "asset", "scriptversion"} <= tables
     heads = ScriptDirectory.from_config(alembic_config()).get_heads()
     assert len(heads) == 1, f"multiple migration heads: {heads}"
     with engine.connect() as conn:

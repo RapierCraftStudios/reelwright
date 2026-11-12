@@ -109,3 +109,73 @@ def test_server_url_must_be_https_unless_loopback() -> None:
     for bad in ("http://100.64.0.7:8000", "http://devbox.example.ts.net", "ftp://x", "https://"):
         with pytest.raises(ValueError):
             check_server_url(bad)
+
+
+def test_proxy_job_uploads_output_then_removes_scratch(
+    client: TestClient, tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("REELWRIGHT_PROXY_DIR", str(tmp_path / "proxies"))
+    monkeypatch.setenv("REELWRIGHT_FREE_DISK_FLOOR_MB", "0")
+    entry = {
+        "path": "D:\\DJI\\DJI_0003.MP4",
+        "host": "mrdubey",
+        "checksum": "c" * 64,
+        "size_bytes": 10,
+        "kind": "camera",
+        "duration_s": 2.0,
+    }
+    (asset,) = client.post("/api/assets/manifest", json={"entries": [entry]}).json()
+    monkeypatch.chdir(tmp_path)
+
+    def fake_encode(argv: list[str], policy: ResourcePolicy) -> int:
+        (tmp_path / argv[-1]).write_bytes(b"720p-proxy")
+        return 0
+
+    agent = Agent(
+        "http://127.0.0.1:8000",
+        "ci-cpu",
+        cpu=True,
+        client=client,
+        runner=fake_encode,
+        probe=cpu_probe,
+    )
+    assert agent.tick() is True
+    with Session(get_engine()) as session:
+        job = session.get(RenderJob, asset["proxy_job_id"])
+        assert job is not None and job.status == "done"
+        assert queue.job_to_read(job).outputs["uploaded"] is True
+    (listed,) = client.get("/api/assets").json()
+    assert listed["proxy_path"] and open(listed["proxy_path"], "rb").read() == b"720p-proxy"
+    assert not (tmp_path / f"rw-proxy-{asset['id']}.mp4").exists()
+
+
+def test_proxy_upload_rejected_below_floor_fails_the_job(
+    client: TestClient, tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("REELWRIGHT_PROXY_DIR", str(tmp_path / "proxies"))
+    monkeypatch.setenv("REELWRIGHT_FREE_DISK_FLOOR_MB", str(10**12))  # never enough free disk
+    out = tmp_path / "rw-proxy-1.mp4"
+    out.write_bytes(b"720p-proxy")
+    entry = {"path": "/m/a.mp4", "checksum": "d" * 64, "size_bytes": 1, "kind": "camera"}
+    (asset,) = client.post("/api/assets/manifest", json={"entries": [entry]}).json()
+    agent = Agent(
+        "http://127.0.0.1:8000",
+        "w",
+        cpu=True,
+        client=client,
+        runner=lambda a, p: 0,
+        probe=cpu_probe,
+    )
+    payload = {
+        "input": "/m/a.mp4",
+        "output": str(out),
+        "upload": f"/api/assets/{asset['id']}/proxy",
+    }
+    ok, outputs = agent.execute({"id": 1, "kind": "proxy", "payload": payload})
+    assert ok is False and outputs["uploaded"] is False and "507" in outputs["error"]
+    assert out.exists()  # kept for a retry
+    assert client.get("/api/assets").json()[0]["proxy_path"] is None
+    ok, outputs = agent.execute(
+        {"id": 1, "kind": "proxy", "payload": {**payload, "upload": "https://evil.example/x"}}
+    )
+    assert ok is False and "/api/" in outputs["error"]

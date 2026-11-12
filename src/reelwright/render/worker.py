@@ -14,8 +14,9 @@ import subprocess
 import sys
 import threading
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -27,6 +28,7 @@ from reelwright.render.queue import JobKind
 TOKEN_ENV = "REELWRIGHT_WORKER_TOKEN"
 BELOW_NORMAL_PRIORITY_CLASS = 0x00004000
 JOB_OBJECT_LIMIT_PROCESS_MEMORY = 0x00000100
+UPLOAD_CHUNK = 1024 * 1024
 
 ArgvBuilder = Callable[[Mapping[str, Any]], list[str]]
 
@@ -254,7 +256,31 @@ class Agent:
         outputs: dict[str, Any] = {"returncode": rc, "backend": "cpu" if self.cpu else "gpu"}
         if "output" in payload:
             outputs["output"] = payload["output"]
+        if rc == 0 and payload.get("upload"):
+            return self.upload(payload, outputs)
         return rc == 0, outputs
+
+    def upload(
+        self, payload: Mapping[str, Any], outputs: dict[str, Any]
+    ) -> tuple[bool, dict[str, Any]]:
+        """PUT the local output to the server path in payload['upload'], then delete it."""
+        src = Path(str(payload.get("output", "")))
+        target = str(payload["upload"])
+        if not target.startswith("/api/"):
+            return False, {**outputs, "error": f"upload must be an /api/ path, got {target!r}"}
+
+        def chunks() -> Iterator[bytes]:
+            with src.open("rb") as fh:
+                while chunk := fh.read(UPLOAD_CHUNK):
+                    yield chunk
+
+        try:
+            resp = self.client.put(target, content=chunks(), headers={"Content-Type": "video/mp4"})
+            resp.raise_for_status()
+        except (OSError, httpx.HTTPError) as e:
+            return False, {**outputs, "uploaded": False, "error": f"upload failed: {e}"}
+        src.unlink(missing_ok=True)
+        return True, {**outputs, "uploaded": True}
 
     def tick(self) -> bool:
         """Heartbeat, pull one job and run it. False when there was no job."""
