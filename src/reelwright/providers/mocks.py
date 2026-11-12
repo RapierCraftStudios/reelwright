@@ -9,6 +9,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from spectracut.providers.base import Completion
+from spectracut.providers.mock_text import MockTextProvider
+
 
 @dataclass
 class MockYouTube:
@@ -75,10 +78,16 @@ class LocalCpuWorker:
 
 @dataclass
 class MockLLM:
-    """Canned completions for CI."""
+    """Deterministic, schema-valid structured completions for CI (SpectraCut ``TextProvider``).
 
+    Delegates to SpectraCut's ``MockTextProvider``: no network, no CLI, and it honours the schema's
+    ``minItems``/``maxItems``, ``enum`` and ``minLength``.
+    """
+
+    name: str = "mock-llm"
     prompts: list[str] = field(default_factory=list)
 
-    def complete(self, prompt: str) -> str:
+    def complete(self, system: str, prompt: str, *, schema: dict[str, Any]) -> Completion:
         self.prompts.append(prompt)
-        return f"[mock completion for {len(prompt)} chars]"
+        result: Completion = MockTextProvider().complete(system, prompt, schema=schema)
+        return result
