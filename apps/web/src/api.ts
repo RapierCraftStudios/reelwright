@@ -205,3 +205,74 @@ export function postTakeMark(projectId: number | string, body: TakeMarkCreate): 
 export function listTakeMarks(projectId: number | string): Promise<TakeMark[]> {
   return call<TakeMark[]>(`${prompterUrl(projectId)}/marks`);
 }
+
+// --- Publishing behind approval (/api/publish) ------------------------------------------------
+
+export type PublicationStatus = "draft" | "approved" | "scheduled" | "live" | "failed";
+
+export interface PublicationDiff {
+  field: string;
+  before: unknown;
+  after: unknown;
+}
+
+export interface Approval {
+  id: number;
+  approved_by: string;
+  approved_at: string;
+  payload_hash: string;
+  action: "publish" | "schedule";
+}
+
+export interface Publication {
+  id: number;
+  project_id: number;
+  render_id: number;
+  platform: string;
+  status: PublicationStatus;
+  payload: Record<string, unknown>;
+  payload_hash: string;
+  remote_id: string | null;
+  publish_at: string | null;
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+  approvals: Approval[];
+  diff: PublicationDiff[];
+  preview_url: string | null;
+}
+
+export interface PublicationUpdate {
+  title?: string;
+  description?: string;
+  tags?: string[];
+  thumbnail_path?: string | null;
+  publish_at?: string | null;
+  paid_promotion?: boolean;
+  sponsor?: string | null;
+}
+
+export function listPublications(status?: PublicationStatus): Promise<Publication[]> {
+  const query = status ? `?status=${encodeURIComponent(status)}` : "";
+  return call<Publication[]>(`/api/publish${query}`);
+}
+
+export function getPublication(id: number): Promise<Publication> {
+  return call<Publication>(`/api/publish/${id}`);
+}
+
+export function updatePublication(id: number, body: PublicationUpdate): Promise<Publication> {
+  return call<Publication>(`/api/publish/${id}`, jsonInit("PUT", body));
+}
+
+/** Approve the exact payload hash that was shown; a stale hash is a 409. */
+export function approvePublication(id: number, approvedBy: string, payloadHash: string): Promise<Publication> {
+  return call<Publication>(
+    `/api/publish/${id}/approve`,
+    jsonInit("POST", { approved_by: approvedBy, payload_hash: payloadHash }),
+  );
+}
+
+export function retryPublication(id: number): Promise<Publication> {
+  return call<Publication>(`/api/publish/${id}/retry`, jsonInit("POST"));
+}
