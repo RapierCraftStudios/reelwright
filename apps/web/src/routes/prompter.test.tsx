@@ -213,6 +213,9 @@ describe("PrompterRoute", () => {
       storage: null,
     });
     const fetchMock = stubFetch((url) => (url.endsWith("/takes") ? json({ id: 1 }, 201) : json(doc())));
+    // jsdom lays nothing out, so a running scroll would reach the end on its first frame; hold it.
+    vi.stubGlobal("requestAnimationFrame", () => 0);
+    vi.stubGlobal("cancelAnimationFrame", () => undefined);
     renderPrompter(camera);
     await screen.findByText("Hello there.");
 
