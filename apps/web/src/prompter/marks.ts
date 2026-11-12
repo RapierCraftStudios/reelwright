@@ -42,25 +42,26 @@ function retryable(error: unknown): boolean {
 
 let flushing: Promise<number> | null = null;
 
+async function drain(): Promise<number> {
+  for (;;) {
+    const [head] = readQueue();
+    if (!head) return 0;
+    try {
+      await postTakeMark(head.projectId, head.body);
+    } catch (error) {
+      if (retryable(error)) return readQueue().length;
+      console.warn("dropping a retake mark the API refused", head, error);
+    }
+    writeQueue(readQueue().slice(1));
+  }
+}
+
 /** Send queued marks oldest first; stop at the first retryable failure. Returns how many remain. */
 export function flushPending(): Promise<number> {
-  flushing ??= (async () => {
-    try {
-      for (;;) {
-        const [head] = readQueue();
-        if (!head) return 0;
-        try {
-          await postTakeMark(head.projectId, head.body);
-        } catch (error) {
-          if (retryable(error)) return readQueue().length;
-          console.warn("dropping a retake mark the API refused", head, error);
-        }
-        writeQueue(readQueue().slice(1));
-      }
-    } finally {
-      flushing = null;
-    }
-  })();
+  // .finally always settles asynchronously, so a drain that finishes at once still clears the lock.
+  flushing ??= drain().finally(() => {
+    flushing = null;
+  });
   return flushing;
 }
 
