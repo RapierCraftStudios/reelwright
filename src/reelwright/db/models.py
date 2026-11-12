@@ -8,7 +8,7 @@ from datetime import UTC, date, datetime
 from enum import StrEnum
 from typing import Any
 
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from sqlalchemy import Text, UniqueConstraint
 from sqlmodel import Field, SQLModel
 
@@ -171,6 +171,7 @@ class AssetKind(StrEnum):
 
 SHA256_HEX = re.compile(r"[0-9a-f]{64}")
 VIDEO_KINDS = frozenset({AssetKind.camera, AssetKind.screen, AssetKind.broll})
+TRANSCRIBE_KINDS = frozenset({AssetKind.camera, AssetKind.screen})
 
 
 class Asset(SQLModel, table=True):
@@ -187,6 +188,8 @@ class Asset(SQLModel, table=True):
     duration_s: float = 0.0
     proxy_path: str | None = Field(default=None, max_length=1024)
     proxy_job_id: int | None = None
+    transcript_id: int | None = None
+    transcript_job_id: int | None = None
     created_at: datetime = Field(default_factory=_now)
 
 
@@ -222,4 +225,69 @@ class AssetRead(SQLModel):
     duration_s: float
     proxy_path: str | None
     proxy_job_id: int | None
+    transcript_id: int | None = None
+    transcript_job_id: int | None = None
     created_at: datetime
+
+
+# --- Transcripts (spike § Stack: WhisperX word timestamps, faster-whisper fallback) ------------
+
+MAX_TRANSCRIPT_WORDS = 200_000
+
+
+class Transcript(SQLModel, table=True):
+    """Word-timed speech of one Asset; the words are a JSON array of TranscriptWord."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    asset_id: int = Field(index=True)
+    engine: str = Field(default="", max_length=32)
+    model: str = Field(default="", max_length=64)
+    device: str = Field(default="", max_length=16)
+    language: str = Field(default="", max_length=16)
+    text: str = ""
+    words: str = "[]"
+    word_count: int = 0
+    created_at: datetime = Field(default_factory=_now)
+
+
+class TranscriptWord(SQLModel):
+    """One spoken word: seconds from the start of the asset, and the engine's confidence."""
+
+    word: str = Field(min_length=1, max_length=256)
+    start: float = Field(ge=0)
+    end: float = Field(ge=0)
+    confidence: float = Field(ge=0, le=1)
+
+    @model_validator(mode="after")
+    def _end_after_start(self) -> TranscriptWord:
+        if self.end < self.start:
+            raise ValueError("word end must not be before its start")
+        return self
+
+
+class TranscriptUpload(SQLModel):
+    """What the transcribe job writes and the worker uploads."""
+
+    engine: str = Field(min_length=1, max_length=32)
+    model: str = Field(default="", max_length=64)
+    device: str = Field(default="", max_length=16)
+    language: str = Field(default="", max_length=16)
+    words: list[TranscriptWord] = Field(default_factory=list, max_length=MAX_TRANSCRIPT_WORDS)
+
+
+class TranscriptRead(SQLModel):
+    id: int
+    asset_id: int
+    engine: str
+    model: str
+    device: str
+    language: str
+    text: str
+    words: list[TranscriptWord]
+    created_at: datetime
+
+
+class AssetDetail(AssetRead):
+    """The asset view: the asset plus its transcript once the transcribe job is done."""
+
+    transcript: TranscriptRead | None = None

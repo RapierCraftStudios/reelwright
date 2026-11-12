@@ -52,18 +52,25 @@ def _ffmpeg(hw: bool, vcodec: str, *filters: str) -> ArgvBuilder:
     return build
 
 
-def _whisperx(device: str, compute_type: str) -> ArgvBuilder:
+TRANSCRIBE_JOB = Path(__file__).resolve().parents[3] / "workers" / "gpu" / "jobs" / "transcribe.py"
+
+
+def _transcribe(device: str, compute_type: str) -> ArgvBuilder:
+    """WhisperX (faster-whisper fallback) via the job script; it falls back to CPU itself."""
+
     def build(payload: Mapping[str, Any]) -> list[str]:
         src, dst = _io(payload)
         return [
-            "whisperx",
+            sys.executable,
+            str(TRANSCRIBE_JOB),
+            "--input",
             src,
+            "--output",
+            dst,
             "--device",
             device,
-            "--compute_type",
+            "--compute-type",
             compute_type,
-            "--output_dir",
-            dst,
         ]
 
     return build
@@ -73,14 +80,14 @@ GPU_EXECUTORS: dict[JobKind, ArgvBuilder] = {
     JobKind.transcode: _ffmpeg(True, "h264_nvenc", "-preset", "p5"),
     JobKind.proxy: _ffmpeg(True, "h264_nvenc", "-vf", "scale=-2:720", "-preset", "p1"),
     JobKind.render: _ffmpeg(True, "h264_nvenc", "-preset", "p7", "-rc", "vbr"),
-    JobKind.transcribe: _whisperx("cuda", "float16"),
+    JobKind.transcribe: _transcribe("cuda", "float16"),
 }
 
 CPU_EXECUTORS: dict[JobKind, ArgvBuilder] = {
     JobKind.transcode: _ffmpeg(False, "libx264", "-preset", "medium"),
     JobKind.proxy: _ffmpeg(False, "libx264", "-vf", "scale=-2:720", "-preset", "veryfast"),
     JobKind.render: _ffmpeg(False, "libx264", "-preset", "slow"),
-    JobKind.transcribe: _whisperx("cpu", "int8"),
+    JobKind.transcribe: _transcribe("cpu", "int8"),
 }
 
 
@@ -275,7 +282,8 @@ class Agent:
                     yield chunk
 
         try:
-            resp = self.client.put(target, content=chunks(), headers={"Content-Type": "video/mp4"})
+            content_type = str(payload.get("content_type") or "video/mp4")
+            resp = self.client.put(target, content=chunks(), headers={"Content-Type": content_type})
             resp.raise_for_status()
         except (OSError, httpx.HTTPError) as e:
             return False, {**outputs, "uploaded": False, "error": f"upload failed: {e}"}
