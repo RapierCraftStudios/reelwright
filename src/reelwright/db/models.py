@@ -345,3 +345,60 @@ class AssetDetail(AssetRead):
     """The asset view: the asset plus its transcript once the transcribe job is done."""
 
     transcript: TranscriptRead | None = None
+
+
+# --- Renders (spike § Runtime topology: final renders split across free GPUs) ------------------
+
+MAX_OTIO_CHARS = 20_000_000
+
+
+class Render(SQLModel, table=True):
+    """One final render of an Edit for a project: segment jobs, a concat job, a preview proxy.
+
+    ``target_path`` is the requested output on the capture PC. ``output_path`` is set once the
+    concat job has written it there. ``preview_path`` is the proxy on the dev server.
+    """
+
+    id: int | None = Field(default=None, primary_key=True)
+    project_id: int = Field(foreign_key="project.id", index=True)
+    status: str = Field(default="queued", max_length=16)
+    otio: str = Field(sa_type=Text)
+    fps_num: int
+    fps_den: int = 1
+    frames: int
+    segments: int = 1
+    job_ids: str = "[]"
+    concat_job_id: int | None = None
+    preview_job_id: int | None = None
+    target_path: str = Field(max_length=1024)
+    output_path: str | None = Field(default=None, max_length=1024)
+    preview_path: str | None = Field(default=None, max_length=1024)
+    error: str | None = Field(default=None, max_length=2000)
+    created_at: datetime = Field(default_factory=_now)
+
+
+class RenderCreate(SQLModel):
+    otio: str = Field(min_length=2, max_length=MAX_OTIO_CHARS)
+    output_path: str = Field(min_length=1, max_length=1000)
+
+    @field_validator("output_path")
+    @classmethod
+    def _absolute_mp4(cls, value: str) -> str:
+        absolute = re.match(r"^(?:[A-Za-z]:[\\/]|\\\\|/)", value) is not None
+        if not absolute or not value.lower().endswith(".mp4"):
+            raise ValueError("output_path must be an absolute .mp4 path on the capture PC")
+        return value
+
+
+class RenderRead(SQLModel):
+    id: int
+    project_id: int
+    status: str
+    frames: int
+    fps: float
+    segments: int
+    target_path: str
+    output_path: str | None
+    preview_path: str | None
+    error: str | None
+    created_at: datetime

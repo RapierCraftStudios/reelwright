@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
+import json
 import os
 import subprocess
 import sys
@@ -17,6 +18,7 @@ from reelwright.render.worker import (
     BELOW_NORMAL_PRIORITY_CLASS,
     CPU_EXECUTORS,
     GPU_EXECUTORS,
+    RENDER_JOB,
     Agent,
     ResourcePolicy,
     check_server_url,
@@ -31,13 +33,38 @@ def cpu_probe(**_: Any) -> dict[str, Any]:
     return {"host": "ci", "capabilities": ["cpu", "ffmpeg"], "yielding": False}
 
 
+def _spec(argv: list[str]) -> dict[str, Any]:
+    path = argv[argv.index("--spec") + 1]
+    try:
+        return dict(json.loads(open(path, encoding="utf-8").read()))
+    finally:
+        os.unlink(path)
+
+
 def test_cpu_and_gpu_executors_cover_the_same_job_kinds() -> None:
     assert set(CPU_EXECUTORS) == set(GPU_EXECUTORS) == set(JobKind)
     for kind in JobKind:
         cpu_argv = CPU_EXECUTORS[kind](PAYLOAD)
-        assert "in.mov" in cpu_argv
+        gpu_argv = GPU_EXECUTORS[kind](PAYLOAD)
+        if kind == JobKind.render:  # the payload goes in a spec file, not on the command line
+            assert cpu_argv[:2] == [sys.executable, str(RENDER_JOB)]
+            assert cpu_argv[cpu_argv.index("--encoder") + 1] == "libx264"
+            assert gpu_argv[gpu_argv.index("--encoder") + 1] == "h264_nvenc"
+            assert gpu_argv[gpu_argv.index("--hwaccel") + 1] == "cuda"
+            assert _spec(cpu_argv) == _spec(gpu_argv) == PAYLOAD
+        else:
+            assert "in.mov" in cpu_argv
         assert not {"cuda", "h264_nvenc"} & set(cpu_argv)
-        assert {"cuda", "h264_nvenc"} & set(GPU_EXECUTORS[kind](PAYLOAD))
+        assert {"cuda", "h264_nvenc"} & set(gpu_argv)
+
+
+def test_render_spec_file_holds_the_whole_payload() -> None:
+    payload = {"render_id": 3, "mode": "segment", "otio": "x" * 40_000, "output": "D:/o.seg0.mov"}
+    argv = GPU_EXECUTORS[JobKind.render](payload)
+    assert sum(len(a) for a in argv) < 32767  # fits a Windows command line
+    spec = argv[argv.index("--spec") + 1]
+    assert os.path.basename(spec).startswith("rw-render-")
+    assert _spec(argv) == payload
 
 
 def test_mock_cpu_worker_declares_every_job_kind() -> None:
@@ -77,6 +104,8 @@ def test_cpu_agent_runs_a_gpu_kind_job_end_to_end(client: TestClient) -> None:
 def test_bad_payload_fails_the_job_instead_of_crashing() -> None:
     agent = Agent("https://x.example", "w", cpu=True, runner=lambda a, p: 0, probe=cpu_probe)
     ok, outputs = agent.execute({"id": 1, "kind": "render", "payload": {}})
+    assert ok is False and "'output'" in outputs["error"]
+    ok, outputs = agent.execute({"id": 1, "kind": "proxy", "payload": {}})
     assert ok is False and "input" in outputs["error"]
 
 
