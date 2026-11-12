@@ -13,3 +13,10 @@ proxies/
 secrets.env
 *.pem
 *.key
+data/
+test-results/
+playwright-report/
+*.tsbuildinfo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
