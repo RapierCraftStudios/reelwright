@@ -81,7 +81,9 @@ export function ProjectsRoute() {
           <tbody>
             {projects.map((p) => (
               <tr key={p.id} data-testid="project-row">
-                <td>{p.title}</td>
+                <td>
+                  <a href={`/projects/${p.id}/script`}>{p.title}</a>
+                </td>
                 <td>{p.format}</td>
                 <td>{p.status}</td>
               </tr>

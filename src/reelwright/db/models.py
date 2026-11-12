@@ -9,7 +9,7 @@ from enum import StrEnum
 from typing import Any
 
 from pydantic import field_validator, model_validator
-from sqlalchemy import UniqueConstraint
+from sqlalchemy import Text, UniqueConstraint
 from sqlmodel import Field, SQLModel
 
 
@@ -46,6 +46,32 @@ class ProjectRead(ProjectBase):
     id: int
     slug: str
     status: str
+    created_at: datetime
+
+
+class ScriptVersion(SQLModel, table=True):
+    """One saved version of a project's script markdown (spike § Data model: versioned script)."""
+
+    __table_args__ = (UniqueConstraint("project_id", "version"),)
+
+    id: int | None = Field(default=None, primary_key=True)
+    project_id: int = Field(foreign_key="project.id", index=True)
+    version: int
+    source: str = Field(sa_type=Text)
+    locked_at: datetime | None = None
+    created_at: datetime = Field(default_factory=_now)
+
+
+class ScriptPut(SQLModel):
+    source: str = Field(max_length=500_000)
+
+
+class ScriptVersionRead(SQLModel):
+    id: int
+    project_id: int
+    version: int
+    source: str
+    locked_at: datetime | None
     created_at: datetime
 
 
