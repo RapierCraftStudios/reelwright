@@ -5,8 +5,14 @@ from __future__ import annotations
 
 import pytest
 
-from reelwright.providers import ProviderNotConfigured, Service, get_provider, mocks
-from reelwright.providers.registry import CREDENTIALS, MOCKS
+from reelwright.providers import mocks
+from reelwright.providers.registry import (
+    CREDENTIALS,
+    MOCKS,
+    ProviderNotConfigured,
+    Service,
+    get_provider,
+)
 
 ALL_CREDENTIAL_VARS = sorted({name for names in CREDENTIALS.values() for name in names})
 
