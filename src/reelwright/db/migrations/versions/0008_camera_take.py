@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""camera take (merges the 0005 transcripts and 0006 take mark heads)
+"""camera take
 
-Revision ID: 0007
-Revises: 0005, 0006
+Revision ID: 0008
+Revises: 0007
 Create Date: 2026-11-12 14:12:07.069378
 """
 
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 import sqlmodel.sql.sqltypes
 from alembic import op
 
-revision: str = "0007"
-down_revision: str | Sequence[str] | None = ("0005", "0006")
+revision: str = "0008"
+down_revision: str | Sequence[str] | None = "0007"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
