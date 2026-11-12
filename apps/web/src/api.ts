@@ -176,3 +176,32 @@ export function listScriptVersions(projectId: number | string): Promise<ScriptVe
 export function generateScript(projectId: number | string, topic: string): Promise<ScriptDoc> {
   return call<ScriptDoc>(`${scriptUrl(projectId)}/generate`, jsonInit("POST", { topic }));
 }
+
+export interface TakeMarkCreate {
+  kind: "retake";
+  /** Version number of the locked script being read. */
+  script_version: number;
+  beat_slug: string;
+  line_no: number;
+  /** Device wall clock, ISO 8601 with timezone. */
+  marked_at: string;
+  /** Milliseconds since the reader pressed start. */
+  offset_ms: number;
+}
+
+export interface TakeMark extends TakeMarkCreate {
+  id: number;
+  project_id: number;
+  script_version_id: number;
+  created_at: string;
+}
+
+const prompterUrl = (projectId: number | string) => `/api/prompter/${projectId}`;
+
+export function postTakeMark(projectId: number | string, body: TakeMarkCreate): Promise<TakeMark> {
+  return call<TakeMark>(`${prompterUrl(projectId)}/marks`, jsonInit("POST", body));
+}
+
+export function listTakeMarks(projectId: number | string): Promise<TakeMark[]> {
+  return call<TakeMark[]>(`${prompterUrl(projectId)}/marks`);
+}

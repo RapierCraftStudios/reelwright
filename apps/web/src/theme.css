@@ -31,6 +31,15 @@
   --motion-expand: 150ms;
   --motion-ease: cubic-bezier(0.2, 0, 0, 1);
   --radius: 6px;
+  /* Teleprompter: text on background stays at or above 7:1 (WCAG AAA) in both themes. */
+  --prompter-bg: #000000;
+  --prompter-text: #ffffff;
+  --prompter-text-dim: #c9ced9;
+  --prompter-reading-line: #ffd166;
+  --prompter-overlay: #000000;
+  --prompter-spinner: #ffffff;
+  --prompter-spinner-track: #3a4050;
+  --prompter-font-dyslexia: "Atkinson Hyperlegible", "Lexend", Verdana, Tahoma, sans-serif;
 }
 
 @media (prefers-color-scheme: light) {
@@ -59,6 +68,10 @@
     --cue-music: #9d174d;
     --cue-cut: #9a3412;
     --cue-short: #3730a3;
+    --prompter-bg: #ffffff;
+    --prompter-text: #0a0a0a;
+    --prompter-text-dim: #3d4350;
+    --prompter-reading-line: #7a4d00;
   }
 }
 
@@ -87,6 +100,10 @@
   --cue-music: #9d174d;
   --cue-cut: #9a3412;
   --cue-short: #3730a3;
+  --prompter-bg: #ffffff;
+  --prompter-text: #0a0a0a;
+  --prompter-text-dim: #3d4350;
+  --prompter-reading-line: #7a4d00;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -385,4 +402,195 @@ textarea {
   justify-content: center;
   flex-wrap: wrap;
   margin-top: 1rem;
+}
+
+/* Teleprompter (/prompter/:id): dark-first, high contrast, no transition or animation on the text. */
+.prompter-page {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--prompter-bg);
+  color: var(--prompter-text);
+}
+
+.prompter-controls {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.5rem;
+  background: var(--prompter-bg);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.prompter-controls button {
+  min-height: 44px;
+}
+
+.prompter-back-link {
+  color: var(--prompter-text);
+  padding: 0.35rem;
+}
+
+.prompter-notice {
+  flex: 1 1 10rem;
+  min-width: 0;
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.prompter-banner {
+  margin: 0.5rem;
+}
+
+.prompter-settings {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.75rem;
+  max-height: 50dvh;
+  overflow: auto;
+  padding: 0.75rem;
+  background: var(--color-surface);
+  color: var(--color-text);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.prompter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.prompter-field input,
+.prompter-field select {
+  min-height: 44px;
+  padding: 0 0.5rem;
+}
+
+.prompter-check {
+  flex-direction: row;
+  align-items: center;
+}
+
+.prompter-check input {
+  min-height: 0;
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.prompter-viewport {
+  --reading-line: 35%;
+  position: relative;
+  flex: 1 1 auto;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+/* Phone above the lens: read at the edge nearest the camera, in a narrower column. */
+.prompter-viewport.lens-above-lens {
+  --reading-line: 70%;
+}
+
+.prompter-viewport.is-mirrored {
+  transform: scaleX(-1);
+}
+
+.prompter-reading-line {
+  position: absolute;
+  top: var(--reading-line);
+  left: 0;
+  width: max(0.75rem, calc(var(--prompter-margin) - 0.5rem));
+  border-top: 4px solid var(--prompter-reading-line);
+  pointer-events: none;
+}
+
+.prompter-text {
+  position: absolute;
+  top: var(--reading-line);
+  left: var(--prompter-margin);
+  right: var(--prompter-margin);
+  font-family: var(--font-sans);
+  font-weight: 600;
+  line-height: 1.35;
+  will-change: transform;
+  transition: none;
+  animation: none;
+}
+
+.lens-above-lens .prompter-text {
+  left: calc(var(--prompter-margin) + 10%);
+  right: calc(var(--prompter-margin) + 10%);
+}
+
+.prompter-dyslexia .prompter-text {
+  font-family: var(--prompter-font-dyslexia);
+  letter-spacing: 0.05em;
+  word-spacing: 0.16em;
+  line-height: 1.5;
+}
+
+.prompter-line {
+  margin: 0 0 0.4em;
+  overflow-wrap: anywhere;
+}
+
+.prompter-line.beat-start {
+  margin-top: 0.8em;
+  padding-top: 0.4em;
+  border-top: 2px solid var(--color-border);
+}
+
+.prompter-adlib {
+  color: var(--prompter-text-dim);
+}
+
+.prompter-loading {
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  background: var(--prompter-overlay);
+}
+
+.prompter-spinner {
+  width: 4.5rem;
+  height: 4.5rem;
+  border: 0.5rem solid var(--prompter-spinner-track);
+  border-top-color: var(--prompter-spinner);
+  border-radius: 50%;
+  animation: prompter-spin 1s linear infinite;
+}
+
+@keyframes prompter-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .prompter-spinner {
+    animation: none;
+  }
+}
+
+.prompter-empty {
+  padding: 2rem 1rem;
+  font-size: 1.5rem;
+  text-align: center;
+}
+
+.prompter-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
