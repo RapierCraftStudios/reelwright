@@ -36,7 +36,7 @@ def tokens(text: str) -> list[str]:
 
 
 @dataclass(frozen=True)
-class ScriptLine:
+class AlignLine:
     """One spoken line of the script, pointing back to its beat."""
 
     beat_slug: str
@@ -53,7 +53,7 @@ class ScriptLine:
 class Attempt:
     """One reading of a script line in one asset: words ``first..last`` inclusive."""
 
-    line: ScriptLine
+    line: AlignLine
     asset_id: int
     first: int
     last: int
@@ -63,14 +63,14 @@ class Attempt:
     words: tuple[TranscriptWord, ...]
 
 
-def script_lines(script: Script) -> list[ScriptLine]:
+def script_lines(script: Script) -> list[AlignLine]:
     """The spoken lines of a script in order; lines with no words are skipped."""
-    out: list[ScriptLine] = []
+    out: list[AlignLine] = []
     for beat in script.beats:
         for line in beat.spoken:
             toks = tuple(tokens(line.text))
             if toks:
-                out.append(ScriptLine(beat.slug, line.line_no, line.text, toks))
+                out.append(AlignLine(beat.slug, line.line_no, line.text, toks))
     return out
 
 
@@ -95,7 +95,7 @@ def filler_runs(toks: Sequence[str], scripted: Sequence[str] = ()) -> list[tuple
 
 
 def find_attempts(
-    line: ScriptLine,
+    line: AlignLine,
     asset_id: int,
     words: Sequence[TranscriptWord],
     min_ratio: float = MIN_MATCH_RATIO,

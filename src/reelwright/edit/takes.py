@@ -15,7 +15,7 @@ from statistics import median
 
 from pydantic import BaseModel, Field
 
-from reelwright.edit.align import Attempt, ScriptLine, filler_runs, normalise
+from reelwright.edit.align import AlignLine, Attempt, filler_runs, normalise
 
 # A retake mark counts for the take it follows until the next attempt or this many seconds.
 RETAKE_WINDOW_S = 3.0
@@ -49,7 +49,7 @@ class Take:
     scores: Scores
 
     @property
-    def line(self) -> ScriptLine:
+    def line(self) -> AlignLine:
         return self.attempt.line
 
 
@@ -120,8 +120,8 @@ def score_attempts(attempts: Sequence[Attempt], marks: Sequence[RetakeMark] = ()
 
 
 def pick_best_takes(
-    lines: Sequence[ScriptLine], takes: Sequence[Take]
-) -> tuple[list[Take], list[ScriptLine]]:
+    lines: Sequence[AlignLine], takes: Sequence[Take]
+) -> tuple[list[Take], list[AlignLine]]:
     """The best take per line in script order, and the lines with no take at all.
 
     Retake-marked takes are excluded unless every take of the line is marked; ties go to the
@@ -131,7 +131,7 @@ def pick_best_takes(
     for t in takes:
         by_line.setdefault(t.line.key, []).append(t)
     chosen: list[Take] = []
-    missing: list[ScriptLine] = []
+    missing: list[AlignLine] = []
     for line in lines:
         options = by_line.get(line.key, [])
         if not options:
