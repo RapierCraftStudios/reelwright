@@ -278,3 +278,56 @@ test("smooth scroll moves a little every frame, with no CSS animation on the tex
   expect(result.ys[0]).toBeGreaterThan(result.ys[result.ys.length - 1]);
   expect(result.animations).toBe(0);
 });
+
+// #50: camera control is optional. With no camera paired the prompter behaves exactly as before.
+const NO_CAMERA = /No camera paired|Camera control needs Chrome on Android/;
+
+test("with no camera paired the prompter still reads and marks, and never opens a Bluetooth chooser", async ({ page }) => {
+  await page.addInitScript(() => {
+    const w = window as unknown as { __chooser: number };
+    w.__chooser = 0;
+    const bt = (navigator as Navigator & { bluetooth?: { requestDevice?: unknown; getDevices?: unknown } }).bluetooth;
+    if (bt) {
+      for (const name of ["requestDevice", "getDevices"] as const) {
+        Object.defineProperty(bt, name, {
+          configurable: true,
+          value: () => {
+            w.__chooser += 1;
+            return Promise.reject(new Error("no device in e2e"));
+          },
+        });
+      }
+    }
+  });
+  const takeRequests: string[] = [];
+  page.on("request", (request) => {
+    if (request.url().includes("/takes")) takeRequests.push(request.url());
+  });
+  const id = await lockedProject(page, "No camera");
+  await openPrompter(page, id);
+  await expect(page.getByTestId("camera-status")).toContainText(NO_CAMERA);
+  await expect(page.getByRole("button", { name: "Stop" })).toHaveCount(0);
+
+  await page.keyboard.press("Space");
+  await expect.poll(() => activeLine(page), { timeout: 5000 }).not.toBe("8");
+  await page.keyboard.press("s");
+  await expect(page.getByRole("button", { name: "Start" })).toBeVisible();
+  await page.keyboard.press("r");
+  await expect.poll(async () => (await marks(page, id)).length).toBe(1);
+
+  expect(await page.evaluate(() => (window as unknown as { __chooser: number }).__chooser)).toBe(0);
+  expect(takeRequests).toEqual([]);
+});
+
+test("at 360x740 the camera pill is visible beside the controls", async ({ page }) => {
+  const id = await lockedProject(page, "Camera pill");
+  await page.setViewportSize({ width: 360, height: 740 });
+  await openPrompter(page, id);
+  await expect(page.getByTestId("camera-status")).toBeInViewport();
+  await expect(page.getByTestId("camera-status")).toContainText(NO_CAMERA);
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(0);
+  for (const name of ["Start", "Back one line", "Mark retake", "Settings"]) {
+    await expect(page.getByRole("button", { name })).toBeInViewport();
+  }
+});
