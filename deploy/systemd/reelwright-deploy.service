@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# One deploy pass, fired by reelwright-deploy.timer: staging first, then prod.
+# The leading "-" lets prod deploy even when staging fails; the unit reports prod's result.
+[Unit]
+Description=Reelwright pull-based deploy (staging, prod)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=PATH=%h/.local/bin:%h/.local/share/pnpm:/usr/local/bin:/usr/bin:/bin
+ExecStart=-%h/reelwright/prod/deploy/deploy.sh staging
+ExecStart=%h/reelwright/prod/deploy/deploy.sh prod
+TimeoutStartSec=15min

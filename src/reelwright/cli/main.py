@@ -3,6 +3,10 @@
 
 from __future__ import annotations
 
+import signal
+import threading
+from types import FrameType
+
 import typer
 import uvicorn
 from sqlmodel import Session
@@ -23,6 +27,35 @@ def serve(
 ) -> None:
     """Run the API and dashboard."""
     uvicorn.run("reelwright.api.app:create_app", factory=True, host=host, port=port, reload=reload)
+
+
+@app.command("migrate")
+def migrate_command() -> None:
+    """Apply database migrations up to head (deploys run this before restarting)."""
+    migrate()
+    typer.echo("Migrations applied.")
+
+
+@app.command()
+def scheduler(
+    interval: float = typer.Option(60.0, help="Seconds between ticks."),
+    once: bool = typer.Option(False, help="Run a single tick and exit."),
+) -> None:
+    """Run the job scheduler (idle until the job and publish queues land)."""
+    migrate()
+    stop = threading.Event()
+    if not once:
+
+        def _stop(_signum: int, _frame: FrameType | None) -> None:
+            stop.set()
+
+        signal.signal(signal.SIGTERM, _stop)
+        signal.signal(signal.SIGINT, _stop)
+    while True:
+        typer.echo("scheduler: tick (no jobs queued)")
+        if once or stop.wait(interval):
+            break
+    typer.echo("scheduler: stopped")
 
 
 @projects_app.command("list")

@@ -18,3 +18,17 @@ def test_projects_list_shows_project_created_through_api(client: TestClient) -> 
     result = runner.invoke(app, ["projects", "list"])
     assert result.exit_code == 0, result.output
     assert "cli-sees-me\tCLI Sees Me\tshort\tdraft" in result.output
+
+
+def test_migrate_creates_the_schema(tmp_db: str) -> None:
+    from sqlalchemy import create_engine, inspect
+
+    result = runner.invoke(app, ["migrate"])
+    assert result.exit_code == 0, result.output
+    assert "project" in inspect(create_engine(tmp_db)).get_table_names()
+
+
+def test_scheduler_once_ticks_and_exits(tmp_db: str) -> None:
+    result = runner.invoke(app, ["scheduler", "--once"])
+    assert result.exit_code == 0, result.output
+    assert "scheduler: tick" in result.output
