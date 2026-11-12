@@ -88,7 +88,7 @@ def test_spoken_lines_skip_cues_todos_and_blank_lines() -> None:
     source = (
         "---\nformat: long\nworking_title: T\n---\n"
         "## beat: hook | intent: grab\n[music: low pulse]\nHi there {wave}. [broll: desk]\n"
-        "TODO: punchline\n"
+        "[TODO punchline]\n"
         "## beat: cta | intent: subscribe\nSee you next time.\n"
     )
     lines = spoken_lines(parse(source).script)
