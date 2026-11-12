@@ -9,10 +9,11 @@ from reelwright.db import models  # noqa: F401
 from reelwright.db.session import alembic_config, get_engine, migrate
 
 
-def test_migrate_creates_project_table(tmp_db: str) -> None:
+def test_migrate_creates_tables(tmp_db: str) -> None:
     migrate()
     engine = get_engine()
-    assert {"project", "worker", "renderjob", "asset"} <= set(inspect(engine).get_table_names())
+    tables = set(inspect(engine).get_table_names())
+    assert {"project", "worker", "renderjob", "asset", "scriptversion"} <= tables
     heads = ScriptDirectory.from_config(alembic_config()).get_heads()
     assert len(heads) == 1, f"multiple migration heads: {heads}"
     with engine.connect() as conn:

@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from reelwright.api import assets as assets_api
-from reelwright.api import projects, workers
+from reelwright.api import projects, script, workers
 from reelwright.db.session import migrate
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -58,6 +58,7 @@ def create_app() -> FastAPI:
         return {"status": "ok"}
 
     app.include_router(projects.router)
+    app.include_router(script.router)
     app.include_router(workers.router)
     app.include_router(assets_api.router)
     mount_web(app, web_dist())
