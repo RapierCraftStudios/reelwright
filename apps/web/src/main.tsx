@@ -5,6 +5,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 
 import "./theme.css";
 import { ProjectsRoute } from "./routes/projects";
+import { PrompterRoute } from "./routes/prompter";
 import { ScriptEditorRoute } from "./routes/script-editor";
 
 const root = document.getElementById("root");
@@ -16,6 +17,7 @@ createRoot(root).render(
       <Routes>
         <Route path="/" element={<ProjectsRoute />} />
         <Route path="/projects/:id/script" element={<ScriptEditorRoute />} />
+        <Route path="/prompter/:id" element={<PrompterRoute />} />
       </Routes>
     </BrowserRouter>
   </StrictMode>,
