@@ -402,3 +402,168 @@ class RenderRead(SQLModel):
     preview_path: str | None
     error: str | None
     created_at: datetime
+
+
+# --- Publishing behind approval (spike § Guardrails, § Security: approval records) -------------
+
+
+class PublicationStatus(StrEnum):
+    draft = "draft"
+    approved = "approved"
+    scheduled = "scheduled"
+    live = "live"
+    failed = "failed"
+
+
+class Publication(SQLModel, table=True):
+    """One upload of a render to one platform; ``payload`` is the exact JSON that gets sent.
+
+    ``payload_hash`` is the sha256 of the canonical payload. The adapter refuses to run unless an
+    Approval row carries that same hash.
+    """
+
+    id: int | None = Field(default=None, primary_key=True)
+    project_id: int = Field(foreign_key="project.id", index=True)
+    render_id: int = Field(foreign_key="render.id", index=True)
+    platform: str = Field(default="youtube", max_length=16)
+    status: str = Field(default=PublicationStatus.draft.value, index=True, max_length=16)
+    payload: str = Field(sa_type=Text)
+    payload_hash: str = Field(max_length=64)
+    remote_id: str | None = Field(default=None, max_length=128)
+    publish_at: datetime | None = None
+    error: str | None = Field(default=None, max_length=2000)
+    created_at: datetime = Field(default_factory=_now)
+    updated_at: datetime = Field(default_factory=_now)
+
+
+class Approval(SQLModel, table=True):
+    """A recorded human approval: who, when and the exact payload hash they approved."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    publication_id: int = Field(foreign_key="publication.id", index=True)
+    approved_by: str = Field(max_length=64)
+    approved_at: datetime = Field(default_factory=_now)
+    payload_hash: str = Field(max_length=64)
+    action: str = Field(default="publish", max_length=16)
+
+
+class AffiliateLink(SQLModel):
+    label: str = Field(min_length=1, max_length=100)
+    url: str = Field(min_length=9, max_length=2000)
+
+    @field_validator("url")
+    @classmethod
+    def _https(cls, value: str) -> str:
+        if not value.startswith("https://") or any(c.isspace() for c in value):
+            raise ValueError("affiliate links must be https:// URLs")
+        return value
+
+
+MAX_TAG_CHARS = 500
+
+
+def _check_tags(tags: list[str] | None) -> list[str] | None:
+    if tags is None:
+        return None
+    cleaned = [t.strip() for t in tags if t.strip()]
+    if sum(len(t) for t in cleaned) + max(0, len(cleaned) - 1) > MAX_TAG_CHARS:
+        raise ValueError(f"tags may total at most {MAX_TAG_CHARS} characters")
+    return cleaned
+
+
+def _check_aware(value: datetime | None) -> datetime | None:
+    if value is not None and value.tzinfo is None:
+        raise ValueError("publish_at needs a timezone (send an ISO 8601 timestamp with Z)")
+    return value
+
+
+class PublicationFields(SQLModel):
+    title: str = Field(min_length=1, max_length=100)
+    description: str = Field(default="", max_length=5000)
+    tags: list[str] = Field(default_factory=list, max_length=100)
+    thumbnail_path: str | None = Field(default=None, max_length=1024)
+    publish_at: datetime | None = None
+    paid_promotion: bool = False
+    sponsor: str | None = Field(default=None, max_length=200)
+    affiliate_links: list[AffiliateLink] = Field(default_factory=list, max_length=20)
+
+
+class PublicationCreate(PublicationFields):
+    render_id: int
+
+    @field_validator("tags")
+    @classmethod
+    def _tags(cls, value: list[str]) -> list[str]:
+        return _check_tags(value) or []
+
+    @field_validator("publish_at")
+    @classmethod
+    def _aware(cls, value: datetime | None) -> datetime | None:
+        return _check_aware(value)
+
+
+class PublicationUpdate(SQLModel):
+    """Fields to change on a draft; omitted fields keep their value."""
+
+    title: str | None = Field(default=None, min_length=1, max_length=100)
+    description: str | None = Field(default=None, max_length=5000)
+    tags: list[str] | None = Field(default=None, max_length=100)
+    thumbnail_path: str | None = Field(default=None, max_length=1024)
+    publish_at: datetime | None = None
+    paid_promotion: bool | None = None
+    sponsor: str | None = Field(default=None, max_length=200)
+    affiliate_links: list[AffiliateLink] | None = Field(default=None, max_length=20)
+
+    @field_validator("tags")
+    @classmethod
+    def _tags(cls, value: list[str] | None) -> list[str] | None:
+        return _check_tags(value)
+
+    @field_validator("publish_at")
+    @classmethod
+    def _aware(cls, value: datetime | None) -> datetime | None:
+        return _check_aware(value)
+
+
+class ApprovalCreate(SQLModel):
+    approved_by: str = Field(min_length=1, max_length=64)
+    payload_hash: str = Field(min_length=64, max_length=64)
+
+    @field_validator("payload_hash")
+    @classmethod
+    def _sha256_hex(cls, v: str) -> str:
+        if not SHA256_HEX.fullmatch(v):
+            raise ValueError("payload_hash must be a lowercase sha256 hex digest")
+        return v
+
+
+class ApprovalRead(SQLModel):
+    id: int
+    approved_by: str
+    approved_at: datetime
+    payload_hash: str
+    action: str
+
+
+class FieldDiff(SQLModel):
+    field: str
+    before: Any = None
+    after: Any = None
+
+
+class PublicationRead(SQLModel):
+    id: int
+    project_id: int
+    render_id: int
+    platform: str
+    status: str
+    payload: dict[str, Any]
+    payload_hash: str
+    remote_id: str | None
+    publish_at: datetime | None
+    error: str | None
+    created_at: datetime
+    updated_at: datetime
+    approvals: list[ApprovalRead] = Field(default_factory=list)
+    diff: list[FieldDiff] = Field(default_factory=list)
+    preview_url: str | None = None
