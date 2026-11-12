@@ -87,7 +87,7 @@ class FasterWhisperStreamingAsr:
         self._committed = max(self._committed, agreed)
         self._prev = hyp
         if len(self._buffer) > self._window and self._committed:
-            self._trim(_even(hyp[self._committed - 1][1] * BYTES_PER_SECOND))
+            self._trim(_even(hyp[self._committed - 1][1]))
         if len(self._buffer) > self._max:
             # No agreement for too long (noise, crosstalk): start over on recent audio.
             del self._buffer[: len(self._buffer) - self._window]
