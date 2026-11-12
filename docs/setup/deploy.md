@@ -86,3 +86,11 @@ After setup, check the two manual acceptance criteria:
    (no `0.0.0.0`, `*` or LAN address). From a device that is not on the tailnet (e.g. phone on mobile data with
    Tailscale off), connecting to the dev server's LAN/public address on 8480, 8481, 8490 and 8491 fails, and
    `tailscale serve status` shows no Funnel.
+
+Both checks are automated as post-deploy checks in `.forge/post-deploy-checks.json`, run from a checkout on the
+dev server once the change reaches `main`:
+
+- `deploy-push-live-within-5min`: `deploy.sh check-live staging && deploy.sh check-live prod`. Each env must run
+  `origin/<branch>` (or its newest commit must be under 5 minutes old), and `/healthz` must answer on the Tailscale IP.
+- `deploy-tailnet-only-refusal`: `deploy.sh check-tailnet`. Ports 8480/8481 must listen only on the Tailscale IP,
+  `127.0.0.1` must be refused, and `tailscale serve status` must show no Funnel.

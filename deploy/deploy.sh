@@ -5,6 +5,10 @@
 #   deploy.sh prod|staging   free-disk check, fast-forward, build, migrate, restart, health-check;
 #                            on any failure after the fetch, roll back to the previous commit and DB.
 #   deploy.sh serve          apply deploy/tailscale-serve.json (tailnet-only HTTPS fronts).
+#   deploy.sh check-live prod|staging   post-deploy check: the env runs origin/<branch> (or its newest
+#                            commit is under 5 minutes old) and /healthz answers on the Tailscale IP.
+#   deploy.sh check-tailnet  post-deploy check: 8480/8481 listen only on the Tailscale IP, loopback is
+#                            refused and Funnel is off.
 #
 # Knobs (env): REELWRIGHT_DEPLOY_ROOT (checkouts, default ~/reelwright/<env>),
 # REELWRIGHT_DATA_ROOT (DB + lock, default ~/.local/share/reelwright/<env>),
@@ -13,6 +17,8 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# The post-deploy probe runs with a minimal env: fall back to the passwd home when HOME is unset.
+HOME="${HOME:-$(getent passwd "$(id -u)" | cut -d: -f6)}"
 root="${REELWRIGHT_DEPLOY_ROOT:-$HOME/reelwright}"
 data_root="${REELWRIGHT_DATA_ROOT:-${XDG_DATA_HOME:-$HOME/.local/share}/reelwright}"
 min_free_gb="${REELWRIGHT_DEPLOY_MIN_FREE_GB:-10}"
@@ -94,7 +100,7 @@ rollback() {
   exit 1
 }
 
-deploy_env() {
+load_env() {
   env_name="$1"
   local envfile="$here/env/${env_name}.env"
   [[ -f "$envfile" ]] || die "no env file $envfile"
@@ -104,6 +110,10 @@ deploy_env() {
   port="${REELWRIGHT_PORT:?REELWRIGHT_PORT unset in $envfile}"
   dir="$root/$env_name"
   [[ -d "$dir/.git" ]] || die "no checkout at $dir (see docs/setup/deploy.md)"
+}
+
+deploy_env() {
+  load_env "$1"
 
   local data="$data_root/$env_name"
   mkdir -p "$data"
@@ -161,11 +171,70 @@ PY
   )
 }
 
+# Post-deploy check (R1): the env is live at origin/<branch>, or the newest commit is still inside
+# the 5-minute window, and /healthz answers on the Tailscale IP.
+check_live() {
+  load_env "$1"
+  local head target age
+  git -C "$dir" fetch --quiet origin "$branch"
+  head="$(git -C "$dir" rev-parse HEAD)"
+  target="$(git -C "$dir" rev-parse "origin/$branch")"
+  if [[ "$head" != "$target" ]]; then
+    age=$(($(date +%s) - $(git -C "$dir" log -1 --format=%ct "$target")))
+    ((age < 300)) || die "running ${head:0:12} but origin/$branch is ${target:0:12}, committed ${age}s ago (> 5 min)"
+    log "origin/$branch ${target:0:12} is ${age}s old: still inside the 5-minute window"
+  fi
+  health_timeout=0
+  healthy || die "/healthz is not answering on port $port"
+  log "live at ${head:0:12} on port $port"
+}
+
+# Post-deploy check (R3): nothing outside the tailnet can reach the instances.
+check_tailnet() {
+  local ip port addr found bad=0
+  ip="$(tailscale_ip)"
+  for port in 8480 8481; do
+    found=0
+    while read -r addr; do
+      [[ -n "$addr" ]] || continue
+      found=1
+      if [[ "$addr" != "$ip:$port" ]]; then
+        log "port $port listens on $addr, not only the Tailscale IP $ip"
+        bad=1
+      fi
+    done < <(ss -ltnH "sport = :$port" | awk '{ print $4 }')
+    ((found)) || {
+      log "nothing listens on port $port"
+      bad=1
+    }
+    if curl -fsS --max-time 5 -o /dev/null "http://127.0.0.1:$port/healthz"; then
+      log "port $port answers on loopback (outside the tailnet)"
+      bad=1
+    fi
+  done
+  if ! tailscale serve status --json | python3 -c '
+import json, sys
+raw = sys.stdin.read().strip()
+cfg = json.loads(raw) if raw else {}
+sys.exit(1 if any((cfg or {}).get("AllowFunnel", {}).values()) else 0)
+'; then
+    log "Tailscale Funnel is enabled"
+    bad=1
+  fi
+  ((bad == 0)) || die "instances are reachable from outside the tailnet"
+  log "8480/8481 bound only to $ip, loopback refused, no Funnel"
+}
+
 case "${1:-}" in
   prod | staging) deploy_env "$1" ;;
   serve) apply_serve ;;
+  check-live)
+    [[ "${2:-}" == prod || "${2:-}" == staging ]] || die "usage: $0 check-live prod|staging"
+    check_live "$2"
+    ;;
+  check-tailnet) check_tailnet ;;
   *)
-    echo "usage: $0 prod|staging|serve" >&2
+    echo "usage: $0 prod|staging|serve|check-live <env>|check-tailnet" >&2
     exit 2
     ;;
 esac

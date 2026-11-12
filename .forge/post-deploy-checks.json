@@ -1,0 +1,12 @@
+{
+  "deploy-push-live-within-5min": {
+    "run": "bash deploy/deploy.sh check-live staging && bash deploy/deploy.sh check-live prod",
+    "pass": "exit 0",
+    "timeout": 120
+  },
+  "deploy-tailnet-only-refusal": {
+    "run": "bash deploy/deploy.sh check-tailnet",
+    "pass": "exit 0",
+    "timeout": 60
+  }
+}

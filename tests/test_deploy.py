@@ -247,3 +247,104 @@ def test_serve_config_never_enables_funnel() -> None:
     assert not any(cfg.get("AllowFunnel", {}).values())
     proxies = {web["Handlers"]["/"]["Proxy"] for web in cfg["Web"].values()}
     assert proxies == {"http://__TAILSCALE_IP__:8480", "http://__TAILSCALE_IP__:8481"}
+
+
+# Post-deploy checks registered in .forge/post-deploy-checks.json (R1 live half, R3 live half).
+
+
+def _shim(host: Host, name: str, body: str) -> None:
+    shim = host.shims / name
+    shim.write_text("#!/usr/bin/env bash\n" + body)
+    shim.chmod(0o755)
+
+
+def test_post_deploy_checks_are_registered() -> None:
+    checks = json.loads((REPO / ".forge" / "post-deploy-checks.json").read_text())
+    assert "check-live staging" in checks["deploy-push-live-within-5min"]["run"]
+    assert "check-live prod" in checks["deploy-push-live-within-5min"]["run"]
+    assert checks["deploy-tailnet-only-refusal"]["run"] == "bash deploy/deploy.sh check-tailnet"
+
+
+def test_check_live_passes_when_deployed_and_healthy(host: Host) -> None:
+    result = host.run("check-live", "staging")
+    assert result.returncode == 0, result.stderr
+    assert any("http://100.64.0.7:8481/healthz" in c for c in host.calls())
+
+
+def test_check_live_allows_a_fresh_push_inside_the_window(host: Host) -> None:
+    host.push_commit("just-pushed")
+    result = host.run("check-live", "staging")
+    assert result.returncode == 0, result.stderr
+    assert "inside the 5-minute window" in result.stderr
+
+
+def test_check_live_fails_when_a_push_is_older_than_5_minutes(host: Host) -> None:
+    old = "2000-01-01T00:00:00Z"
+    (host.seed / "stale").write_text("stale")
+    _git(host.seed, "add", "stale")
+    subprocess.run(
+        ["git", "commit", "-qm", "stale"],
+        cwd=host.seed,
+        check=True,
+        env={**os.environ, "GIT_AUTHOR_DATE": old, "GIT_COMMITTER_DATE": old},
+    )
+    _git(host.seed, "push", "-q", "origin", "HEAD:staging")
+    result = host.run("check-live", "staging")
+    assert result.returncode != 0
+    assert "> 5 min" in result.stderr
+
+
+def test_check_live_fails_when_healthz_is_down(host: Host) -> None:
+    host.set(healthy=False)
+    assert host.run("check-live", "staging").returncode != 0
+
+
+def _tailnet_host(
+    host: Host, listeners: str, *, funnel: bool = False, loopback: bool = False
+) -> None:
+    (host.shims / "listeners").write_text(listeners)
+    _shim(
+        host,
+        "ss",
+        'port="${!#}"; port="${port##*:}"\ngrep ":$port " "$SHIM_DIR/listeners" || true\n',
+    )
+    _shim(
+        host,
+        "curl",
+        f'echo "curl $*" >> "$SHIM_LOG"\ncase "$*" in *127.0.0.1*) exit {0 if loopback else 7};; esac\n',
+    )
+    status = '{"AllowFunnel": {"x:443": true}}' if funnel else "{}"
+    _shim(
+        host,
+        "tailscale",
+        f"case \"$1\" in ip) echo 100.64.0.7;; serve) echo '{status}';; esac\n",
+    )
+
+
+TAILNET_ONLY = (
+    "LISTEN 0 2048 100.64.0.7:8480 0.0.0.0:* \nLISTEN 0 2048 100.64.0.7:8481 0.0.0.0:* \n"
+)
+
+
+def test_check_tailnet_passes_when_bound_only_to_the_tailscale_ip(host: Host) -> None:
+    _tailnet_host(host, TAILNET_ONLY)
+    result = host.run("check-tailnet")
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize(
+    ("listeners", "funnel", "loopback", "why"),
+    [
+        (TAILNET_ONLY.replace("100.64.0.7:8481", "0.0.0.0:8481"), False, False, "0.0.0.0:8481"),
+        (TAILNET_ONLY, True, False, "Funnel"),
+        (TAILNET_ONLY, False, True, "loopback"),
+        (TAILNET_ONLY.splitlines()[0] + "\n", False, False, "nothing listens on port 8481"),
+    ],
+)
+def test_check_tailnet_fails_when_reachable_outside_the_tailnet(
+    host: Host, listeners: str, funnel: bool, loopback: bool, why: str
+) -> None:
+    _tailnet_host(host, listeners, funnel=funnel, loopback=loopback)
+    result = host.run("check-tailnet")
+    assert result.returncode != 0
+    assert why in result.stderr
