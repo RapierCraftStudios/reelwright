@@ -75,6 +75,60 @@ class ScriptVersionRead(SQLModel):
     created_at: datetime
 
 
+# --- Teleprompter take marks (spike § Route/API map: /api/prompter/:project) --------------------
+
+
+class TakeMarkKind(StrEnum):
+    retake = "retake"
+
+
+class TakeMark(SQLModel, table=True):
+    """A marker pressed on the teleprompter while recording; points back to a locked script line.
+
+    `marked_at` is the device's wall clock so the best-take cut (#11) can match it to footage time;
+    `offset_ms` is the time since the reader pressed start.
+    """
+
+    id: int | None = Field(default=None, primary_key=True)
+    project_id: int = Field(foreign_key="project.id", index=True)
+    script_version_id: int = Field(foreign_key="scriptversion.id", index=True)
+    kind: str = Field(default=TakeMarkKind.retake.value, max_length=16)
+    beat_slug: str = Field(max_length=64)
+    line_no: int
+    marked_at: datetime
+    offset_ms: int
+    created_at: datetime = Field(default_factory=_now)
+
+
+class TakeMarkCreate(SQLModel):
+    kind: TakeMarkKind = TakeMarkKind.retake
+    script_version: int = Field(ge=1, description="version number of the locked script read")
+    beat_slug: str = Field(min_length=1, max_length=64)
+    line_no: int = Field(ge=1)
+    marked_at: datetime
+    offset_ms: int = Field(ge=0)
+
+    @field_validator("marked_at")
+    @classmethod
+    def _aware(cls, value: datetime) -> datetime:
+        if value.tzinfo is None:
+            raise ValueError("marked_at needs a timezone (send an ISO 8601 timestamp with Z)")
+        return value
+
+
+class TakeMarkRead(SQLModel):
+    id: int
+    project_id: int
+    script_version_id: int
+    script_version: int
+    kind: str
+    beat_slug: str
+    line_no: int
+    marked_at: datetime
+    offset_ms: int
+    created_at: datetime
+
+
 # --- Render workers and jobs (spike § Runtime topology) ---------------------------------------
 
 
