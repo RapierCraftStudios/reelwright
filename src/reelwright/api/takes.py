@@ -50,9 +50,11 @@ def _version_number(session: Session, script_version_id: int) -> int:
 def create_take(
     project_id: int, body: CameraTakeCreate, response: Response, session: SessionDep
 ) -> CameraTakeRead:
-    """Store a take marker; replaying the same client_id returns the stored one (offline retries)."""
+    """Store a take marker; a replayed client_id returns the stored row (offline retries)."""
     _project(session, project_id)
-    existing = session.exec(select(CameraTake).where(CameraTake.client_id == body.client_id)).first()
+    existing = session.exec(
+        select(CameraTake).where(CameraTake.client_id == body.client_id)
+    ).first()
     if existing is not None:
         if existing.project_id != project_id:
             raise HTTPException(
