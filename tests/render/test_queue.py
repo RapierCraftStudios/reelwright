@@ -85,4 +85,4 @@ def test_complete_rejects_non_claimant(session: Session) -> None:
     with pytest.raises(queue.JobNotFound):
         queue.complete(session, 999, "gpu-a", True, {})
     done = queue.complete(session, job.id, "gpu-a", True, {"output": "b"})
-    assert done.status == "done" and queue.to_read(done).outputs == {"output": "b"}
+    assert done.status == "done" and queue.job_to_read(done).outputs == {"output": "b"}

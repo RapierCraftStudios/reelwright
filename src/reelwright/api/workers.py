@@ -43,7 +43,7 @@ WorkerAuth = [Depends(require_worker_token)]
 @router.get("", response_model=list[WorkerRead])
 def get_workers(session: SessionDep) -> list[WorkerRead]:
     """Live workers (heartbeat within 60 s) with their GPU stats."""
-    return [registry.to_read(w) for w in registry.live_workers(session, registry.utcnow())]
+    return [registry.worker_to_read(w) for w in registry.live_workers(session, registry.utcnow())]
 
 
 @router.post("/heartbeat", response_model=WorkerRead, dependencies=WorkerAuth)
@@ -51,7 +51,7 @@ def heartbeat(body: WorkerHeartbeat, session: SessionDep) -> WorkerRead:
     now = registry.utcnow()
     worker = registry.record_heartbeat(session, body, now)
     queue.requeue_stale(session, now)
-    return registry.to_read(worker)
+    return registry.worker_to_read(worker)
 
 
 @router.get(
@@ -64,7 +64,7 @@ def next_job(worker: str, session: SessionDep) -> RenderJobRead | Response:
     job = queue.next_job_for(session, worker, registry.utcnow())
     if job is None:
         return Response(status_code=status.HTTP_204_NO_CONTENT)
-    return queue.to_read(job)
+    return queue.job_to_read(job)
 
 
 @router.post("/jobs/{job_id}/complete", response_model=RenderJobRead, dependencies=WorkerAuth)
@@ -75,4 +75,4 @@ def complete_job(job_id: int, body: JobComplete, session: SessionDep) -> RenderJ
         raise HTTPException(status_code=404, detail="job not found") from None
     except queue.NotClaimant as e:
         raise HTTPException(status_code=409, detail=str(e)) from None
-    return queue.to_read(job)
+    return queue.job_to_read(job)

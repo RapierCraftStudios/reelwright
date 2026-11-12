@@ -70,7 +70,7 @@ def test_cpu_agent_runs_a_gpu_kind_job_end_to_end(client: TestClient) -> None:
         done = session.get(RenderJob, job_id)
         assert done is not None
         assert (done.status, done.worker) == ("done", "ci-cpu")
-        assert queue.to_read(done).outputs["backend"] == "cpu"
+        assert queue.job_to_read(done).outputs["backend"] == "cpu"
     assert agent.tick() is False
 
 

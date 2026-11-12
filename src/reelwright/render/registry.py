@@ -10,7 +10,7 @@ from sqlmodel import Session, col, select
 from reelwright.db.models import RenderJob, Worker, WorkerHeartbeat, WorkerRead
 from reelwright.render.picker import LIVENESS_S, as_utc, caps_of, is_live
 
-__all__ = ["LIVENESS_S", "live_workers", "record_heartbeat", "to_read", "utcnow"]
+__all__ = ["LIVENESS_S", "live_workers", "record_heartbeat", "worker_to_read", "utcnow"]
 
 
 def utcnow() -> datetime:
@@ -48,7 +48,7 @@ def live_workers(session: Session, now: datetime) -> list[Worker]:
     return [w for w in rows if is_live(w, now)]
 
 
-def to_read(worker: Worker) -> WorkerRead:
+def worker_to_read(worker: Worker) -> WorkerRead:
     return WorkerRead(
         name=worker.name,
         host=worker.host,

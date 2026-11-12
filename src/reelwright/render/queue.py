@@ -141,7 +141,7 @@ def complete(
     return job
 
 
-def to_read(job: RenderJob) -> RenderJobRead:
+def job_to_read(job: RenderJob) -> RenderJobRead:
     assert job.id is not None
     return RenderJobRead(
         id=job.id,
