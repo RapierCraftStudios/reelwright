@@ -50,6 +50,10 @@ class QueueConflict(ValueError):
     """The request does not fit the publication's state (maps to HTTP 409)."""
 
 
+class StaleApproval(QueueConflict):
+    """The approved hash is not the payload's current hash (HTTP 409, nothing recorded)."""
+
+
 class PublishFailed(RuntimeError):
     """The platform call failed; the message is the platform's error."""
 
@@ -155,11 +159,9 @@ def approve(
     if publication.status not in EDITABLE:
         raise QueueConflict(f"a {publication.status} publication was already approved")
     if shown_hash != publication.payload_hash:
-        raise QueueConflict("the payload changed since it was shown; review it again")
+        raise StaleApproval("the payload changed since it was shown; review it again")
     _ready(session, publication)
-    scheduled = publication.publish_at is not None
-    if publication.publish_at is not None and utc(publication.publish_at) <= now:
-        raise QueueConflict("the scheduled time has passed; pick a new one")
+    scheduled = publication.publish_at is not None and utc(publication.publish_at) > now
     session.add(
         Approval(
             publication_id=publication.id or 0,
@@ -178,12 +180,14 @@ def approve(
     return _send(session, publication, provider, now, youtube.publish)
 
 
-def retry(session: Session, publication: Publication, now: datetime, provider: Any) -> Publication:
+def retry(session: Session, publication: Publication, provider: Any, now: datetime) -> Publication:
     """Send a failed publication again under its existing approval."""
     from reelwright.publish import youtube
 
     if publication.status != PublicationStatus.failed:
-        raise QueueConflict(f"only a failed publication can be retried (this one is {publication.status})")
+        raise QueueConflict(
+            f"only a failed publication can be retried (this one is {publication.status})"
+        )
     _ready(session, publication)
     return _send(session, publication, provider, now, youtube.publish)
 

@@ -49,11 +49,15 @@ def chapters(edit: Any, titles: Mapping[str, str] | None = None) -> list[Chapter
     fps = Fraction(edit.rate.fps)
     frames = [0, *(frame for _, frame in starts[1:])]
     ends = [*frames[1:], int(edit.duration)]
-    if any(Fraction(end - start) / fps < MIN_CHAPTER_S for start, end in zip(frames, ends)):
+    if any(
+        Fraction(end - start) / fps < MIN_CHAPTER_S for start, end in zip(frames, ends, strict=True)
+    ):
         return []
     return [
-        Chapter(start_s=float(Fraction(frame) / fps), title=titles.get(slug) or _default_title(slug))
-        for (slug, _), frame in zip(starts, frames)
+        Chapter(
+            start_s=float(Fraction(frame) / fps), title=titles.get(slug) or _default_title(slug)
+        )
+        for (slug, _), frame in zip(starts, frames, strict=True)
     ]
 
 

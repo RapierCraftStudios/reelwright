@@ -32,7 +32,7 @@ from reelwright.publish.chapters import chapters, format_chapters
 from reelwright.render.split import parse_otio
 
 PLATFORM = "youtube"
-AFFILIATE_DISCLOSURE = "Affiliate links: I may earn a commission if you buy through these links."
+AFFILIATE_DISCLOSURE = "Affiliate links: I may earn a commission."
 CAPTION_LANGUAGE = "en"
 
 
@@ -70,9 +70,7 @@ def compose_description(
 def captions_srt(session: Session, edit: Any) -> tuple[str, int]:
     """SRT of the edit's speech from its assets' transcripts, and the cue count ('' and 0
     when no clip has a transcript)."""
-    refs = {
-        clip.media_ref for track in edit.tracks for clip in track.clips() if clip.media_ref
-    }
+    refs = {clip.media_ref for track in edit.tracks for clip in track.clips() if clip.media_ref}
     if not refs:
         return "", 0
     words: dict[str, list[TranscriptWord]] = {}
@@ -130,9 +128,8 @@ def payload_fields(payload: Mapping[str, Any]) -> PublicationFields:
         tags=list(payload.get("tags", [])),
         thumbnail_path=payload.get("thumbnail_path"),
         publish_at=datetime.fromisoformat(at) if at else None,
-        paid_promotion=bool(payload.get("paid_promotion")) and not (
-            payload.get("sponsor") or payload.get("affiliate_links")
-        ),
+        paid_promotion=bool(payload.get("paid_promotion"))
+        and not (payload.get("sponsor") or payload.get("affiliate_links")),
         sponsor=payload.get("sponsor"),
         affiliate_links=[AffiliateLink(**link) for link in payload.get("affiliate_links", [])],
     )
