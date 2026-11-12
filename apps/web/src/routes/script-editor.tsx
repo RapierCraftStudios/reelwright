@@ -578,7 +578,7 @@ export function ScriptEditorRoute() {
                   onScroll={syncScroll}
                 />
               </div>
-              <div id="script-errors">
+              <div id="script-errors" role="status">
                 {errors.length > 0 && (
                   <ul className="error-list" aria-label="Parse errors">
                     {errors.map((e) => (
