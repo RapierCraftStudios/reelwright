@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """script version
 
-Revision ID: 0003
+Revision ID: 0004
 Revises: 0002
-Create Date: 2026-11-12 12:43:03.673163
+Create Date: 2026-11-12 13:25:16.416397
 """
 
 from collections.abc import Sequence
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 import sqlmodel.sql.sqltypes
 from alembic import op
 
-revision: str = "0003"
+revision: str = "0004"
 down_revision: str | None = "0002"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
