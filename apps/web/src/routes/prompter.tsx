@@ -18,7 +18,7 @@ import {
   saveSettings,
 } from "../prompter/settings";
 
-export const EMPTY_MESSAGE = "No locked script — lock one in the editor";
+export const PROMPTER_EMPTY_MESSAGE = "No locked script — lock one in the editor";
 export const LOST_MESSAGE = "Lost connection — keep reading, resyncing";
 export const RESYNC_MS = 5000;
 
@@ -325,7 +325,7 @@ export function PrompterRoute() {
 
       {phase === "empty" && (
         <section className="prompter-empty" aria-labelledby="prompter-empty-title">
-          <p id="prompter-empty-title">{EMPTY_MESSAGE}</p>
+          <p id="prompter-empty-title">{PROMPTER_EMPTY_MESSAGE}</p>
           <Link to={`/projects/${id}/script`}>Open the script editor</Link>
         </section>
       )}

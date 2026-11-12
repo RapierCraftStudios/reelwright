@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Script, ScriptDoc } from "../api";
 import { PENDING_KEY } from "../prompter/marks";
-import { EMPTY_MESSAGE, LOST_MESSAGE, PrompterRoute } from "./prompter";
+import { PROMPTER_EMPTY_MESSAGE, LOST_MESSAGE, PrompterRoute } from "./prompter";
 
 const SCRIPT: Script = {
   front_matter: { format: "long", working_title: "Test" },
@@ -98,14 +98,14 @@ describe("PrompterRoute", () => {
   it("shows the empty state when there is no script", async () => {
     stubFetch(() => json({ detail: "no script yet" }, 404));
     renderPrompter();
-    expect(await screen.findByText(EMPTY_MESSAGE)).toBeTruthy();
+    expect(await screen.findByText(PROMPTER_EMPTY_MESSAGE)).toBeTruthy();
     expect(screen.getByRole("link", { name: "Open the script editor" }).getAttribute("href")).toBe("/projects/1/script");
   });
 
   it("shows the empty state when the script is not locked", async () => {
     stubFetch(() => json(doc(false)));
     renderPrompter();
-    expect(await screen.findByText(EMPTY_MESSAGE)).toBeTruthy();
+    expect(await screen.findByText(PROMPTER_EMPTY_MESSAGE)).toBeTruthy();
     expect(screen.queryByTestId("prompter-text")).toBeNull();
   });
 
