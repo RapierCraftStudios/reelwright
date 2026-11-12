@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // /prompter/:id — the phone teleprompter (spike § Route/API map, § Runtime topology). Reads the
-// locked script with cues hidden, scrolls it, and posts retake marks for the best-take cut.
+// locked script with cues hidden, scrolls it, and posts retake marks for the best-take cut. Voice
+// follow (#7) moves the text to the line the server hears; switching it off leaves the reader on
+// that line, so Start carries on from there.
 import { type ChangeEvent, useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
@@ -17,10 +19,18 @@ import {
   normalizeSettings,
   saveSettings,
 } from "../prompter/settings";
+import { VoiceFollow } from "../prompter/voiceFollow";
 
 export const PROMPTER_EMPTY_MESSAGE = "No locked script — lock one in the editor";
 export const LOST_MESSAGE = "Lost connection — keep reading, resyncing";
 export const RESYNC_MS = 5000;
+const LATENCY_POLL_MS = 1000;
+
+const VOICE_ERRORS: Record<string, string> = {
+  mic_denied: "Microphone blocked — back to manual scrolling",
+  asr_unavailable: "Speech engine unavailable — back to manual scrolling",
+  connection_lost: "Voice follow disconnected — back to manual scrolling",
+};
 
 type Phase = "loading" | "empty" | "ready" | "unavailable";
 
@@ -123,6 +133,9 @@ export function PrompterRoute() {
   const reducedMotion = useReducedMotion();
   const scroller = useRef<ScrollerHandle>(null);
   const startedAt = useRef<number | null>(null);
+  const [voiceOn, setVoiceOn] = useState(false);
+  const [latency, setLatency] = useState<number | null>(null);
+  const voice = useRef<VoiceFollow | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -174,15 +187,61 @@ export function PrompterRoute() {
 
   useEffect(() => saveSettings(settings), [settings]);
 
+  const stopVoice = useCallback(() => {
+    voice.current?.stop();
+    voice.current = null;
+    setVoiceOn(false);
+  }, []);
+
   useEffect(() => {
     setActiveIndex(0);
     setPlaying(false);
-  }, [doc?.version]);
+    stopVoice();
+  }, [doc?.version, stopVoice]);
+
+  useEffect(() => stopVoice, [stopVoice]);
+
+  useEffect(() => {
+    if (!voiceOn) return;
+    const timer = window.setInterval(() => setLatency(voice.current?.p95Ms() ?? null), LATENCY_POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [voiceOn]);
 
   const update = (patch: Partial<PrompterSettings>) => setSettings((s) => normalizeSettings({ ...s, ...patch }));
 
   const lines = doc?.lines ?? [];
   const canRead = phase === "ready" && lines.length > 0;
+
+  const linesRef = useRef(lines);
+  linesRef.current = lines;
+
+  const toggleVoice = useCallback(() => {
+    if (voice.current) {
+      stopVoice();
+      return;
+    }
+    if (!doc || doc.lines.length === 0) return;
+    setPlaying(false);
+    const follow = new VoiceFollow({
+      projectId: id,
+      onPosition: (lineNo) => {
+        const index = linesRef.current.findIndex((line) => line.lineNo === lineNo);
+        if (index >= 0) scroller.current?.jumpToLine(index);
+      },
+      onError: (code) => {
+        if (voice.current === follow) {
+          voice.current = null;
+          setVoiceOn(false);
+        }
+        setNotice(VOICE_ERRORS[code] ?? `Voice follow stopped (${code}) — back to manual scrolling`);
+      },
+    });
+    voice.current = follow;
+    setVoiceOn(true);
+    setNotice("");
+    const line = doc.lines[Math.min(activeIndex, doc.lines.length - 1)];
+    void follow.start({ scriptVersion: doc.version, lineNo: line.lineNo });
+  }, [activeIndex, doc, id, stopVoice]);
 
   const markRetake = useCallback(async () => {
     if (!doc || doc.lines.length === 0) return;
@@ -207,14 +266,17 @@ export function PrompterRoute() {
       if (!canRead) return;
       if (action === "toggle") {
         if (!playing && startedAt.current === null) startedAt.current = Date.now();
+        if (!playing) stopVoice(); // manual play takes over from the line voice follow reached
         setPlaying(!playing);
       } else if (action === "back") {
         scroller.current?.backOneLine();
+        const back = lines[Math.max(0, activeIndex - 1)];
+        if (voice.current && back) voice.current.seek(back.lineNo);
       } else {
         void markRetake();
       }
     },
-    [canRead, markRetake, playing],
+    [activeIndex, canRead, lines, markRetake, playing, stopVoice],
   );
 
   const runRef = useRef(run);
@@ -247,6 +309,15 @@ export function PrompterRoute() {
         </button>
         <button type="button" onClick={() => run("retake")} disabled={!canRead}>
           Mark retake
+        </button>
+        <button
+          type="button"
+          className="prompter-voice"
+          aria-pressed={voiceOn}
+          onClick={toggleVoice}
+          disabled={!canRead}
+        >
+          Voice follow
         </button>
         <button
           type="button"
@@ -313,6 +384,10 @@ export function PrompterRoute() {
             />
             <span>Dyslexia-friendly font</span>
           </label>
+          <p className="prompter-latency">
+            Voice round trip (p95):{" "}
+            <span data-testid="prompter-latency">{latency === null ? "—" : `${Math.round(latency)} ms`}</span>
+          </p>
         </section>
       )}
 

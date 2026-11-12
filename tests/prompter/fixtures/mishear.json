@@ -1,0 +1,16 @@
+{
+  "description": "About one word in five misheard or split by the recogniser: the position still tracks line by line.",
+  "lines": [
+    "Three weeks ago I deleted every editing app on my laptop.",
+    "Not because I quit making videos, but because I built something to edit them for me.",
+    "It reads my script, watches the footage, and picks the best take of every line.",
+    "Today I'm going to show you exactly how it works and where it still breaks."
+  ],
+  "start": 0,
+  "steps": [
+    {"say": "free weeks ago i deleted every editting app on my lap top", "line": 0},
+    {"say": "not because i quick making videos but because i bill something to edit them four me", "line": 1},
+    {"say": "it reeds my script watches the foot age and picks the best tape of every line", "line": 2},
+    {"say": "today im going to show you exactly how it works and wear it still brakes", "line": 3}
+  ]
+}

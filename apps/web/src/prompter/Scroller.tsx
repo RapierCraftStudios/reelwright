@@ -2,7 +2,8 @@
 // The teleprompter text. Motion is a requestAnimationFrame loop that integrates speed × frame time
 // into a translateY transform (no CSS transitions or easing), so the scroll never jumps. With
 // prefers-reduced-motion it advances one whole line at a time instead. The transport (playing,
-// back one line) comes from the parent so voice-following scroll (#7) can drive it later.
+// back one line) comes from the parent. Voice follow (#7) moves the text with jumpToLine, which
+// snaps to a line the same way back-one-line does, so manual play resumes from that line.
 import {
   type CSSProperties,
   type ReactNode,
@@ -26,6 +27,8 @@ export interface PrompterLine {
 
 export interface ScrollerHandle {
   backOneLine(): void;
+  /** Snap to a line by its index in `lines` (voice follow). */
+  jumpToLine(index: number): void;
 }
 
 interface ScrollerProps {
@@ -89,7 +92,11 @@ export const Scroller = forwardRef<ScrollerHandle, ScrollerProps>(function Scrol
     [apply, lines.length],
   );
 
-  useImperativeHandle(ref, () => ({ backOneLine: () => jumpTo(active.current - 1) }), [jumpTo]);
+  useImperativeHandle(
+    ref,
+    () => ({ backOneLine: () => jumpTo(active.current - 1), jumpToLine: (index: number) => jumpTo(index) }),
+    [jumpTo],
+  );
 
   // Text metrics changed (size, margin, font, lines): keep the reader on the same line.
   useLayoutEffect(() => {

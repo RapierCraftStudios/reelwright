@@ -1,0 +1,7 @@
+{
+  "r3-voice-manual-switch-on-phone": {
+    "run": "pnpm install --frozen-lockfile && pnpm --filter @reelwright/web build && pnpm exec playwright test tests/e2e/prompter.spec.ts -g 'voice follow' --workers=1",
+    "pass": "exit 0",
+    "timeout": 600
+  }
+}
