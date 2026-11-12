@@ -8,12 +8,12 @@ from reelwright.db import models  # noqa: F401
 from reelwright.db.session import get_engine, migrate
 
 
-def test_migrate_creates_project_table(tmp_db: str) -> None:
+def test_migrate_creates_tables(tmp_db: str) -> None:
     migrate()
     engine = get_engine()
-    assert "project" in inspect(engine).get_table_names()
+    assert {"project", "scriptversion"} <= set(inspect(engine).get_table_names())
     with engine.connect() as conn:
-        assert MigrationContext.configure(conn).get_current_revision() == "0001"
+        assert MigrationContext.configure(conn).get_current_revision() == "0002"
 
 
 def test_migrations_match_models(tmp_db: str) -> None:
