@@ -6,8 +6,9 @@ and a filter script. Every video piece is converted to the timeline rate and the
 to its exact frame count. Every audio piece is resampled to 48 kHz and then trimmed and padded to
 an exact sample count, so the render has the timeline's length to the frame. There is no
 ``-frames:v`` cap: ffmpeg closes the output when it reaches that cap, which drops audio still
-buffered behind the last video frame (up to ~10 ms at a segment end). Sample positions are derived from timeline frames
-(``round(frame * 48000 / fps)``), so segments rendered separately add up exactly.
+buffered behind the last video frame (up to ~10 ms at a segment end). Sample positions are derived
+from timeline frames (``round(frame * 48000 / fps)``), so segments rendered separately add up
+exactly.
 
 Each piece has its own input with an accurate ``-ss`` seek. The decoder starts near the piece and
 does not buffer earlier frames, which keeps memory flat on long renders under the worker's RAM cap.

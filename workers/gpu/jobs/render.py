@@ -9,9 +9,10 @@ for the same reason.
     python workers/gpu/jobs/render.py --spec rw-render-7.json --encoder h264_nvenc
 
 Segment spec: {"mode": "segment", "otio", "start_frame", "end_frame", "output"} gives a .mov with
-H.264 video and PCM audio (QuickTime keeps the exact 1/fps timescale; Matroska rounds timestamps to
-milliseconds, which jitters the frame spacing across a seam at 30000/1001). Concat spec: {"mode": "concat", "segments": [...], "output"} gives an
-.mp4 with the video stream-copied and AAC audio, and deletes the segments once it is written.
+H.264 video and PCM audio. QuickTime keeps the exact 1/fps timescale; Matroska rounds timestamps
+to milliseconds, which jitters the frame spacing across a seam at 30000/1001. Concat spec:
+{"mode": "concat", "segments": [...], "output"} gives an .mp4 with the video stream-copied and AAC
+audio, and deletes the segments once it is written.
 Every output is written to ``<output>.part`` first and then moved into place.
 """
 
@@ -102,9 +103,10 @@ def main(argv: Sequence[str] | None = None, run: Run = _run) -> int:
     try:
         spec_path = Path(args.spec)
         spec = json.loads(spec_path.read_text(encoding="utf-8"))
-        if spec_path.name.startswith("rw-render-") and spec_path.parent.resolve() == Path(
-            tempfile.gettempdir()
-        ).resolve():
+        if (
+            spec_path.name.startswith("rw-render-")
+            and spec_path.parent.resolve() == Path(tempfile.gettempdir()).resolve()
+        ):
             spec_path.unlink(missing_ok=True)  # written by the worker agent for this run only
         if spec.get("mode") == "concat":
             out = concat_segments(spec, run)

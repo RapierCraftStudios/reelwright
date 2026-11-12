@@ -10,6 +10,7 @@ queues a preview proxy, which the worker uploads to ``/api/projects/{id}/renders
 
 from __future__ import annotations
 
+import importlib
 import json
 from dataclasses import dataclass
 from datetime import datetime
@@ -45,7 +46,7 @@ class Mode(StrEnum):
     concat = "concat"
 
 
-@dataclass(frozen=True)
+@dataclass
 class _RenderJobShape:
     """What a segment job asks of the picker (queue.DEFAULT_CAPS for render)."""
 
@@ -55,7 +56,7 @@ class _RenderJobShape:
 
 def parse_otio(text: str) -> Edit:
     """An OTIO JSON document as an Edit; ValueError when it is not a readable timeline."""
-    import opentimelineio as otio
+    otio: Any = importlib.import_module("opentimelineio")  # untyped package
 
     try:
         timeline = otio.adapters.read_from_string(text, "otio_json")

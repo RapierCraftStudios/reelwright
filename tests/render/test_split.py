@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import shutil
 import subprocess
@@ -10,6 +11,7 @@ import sys
 from datetime import UTC, datetime
 from fractions import Fraction
 from pathlib import Path
+from typing import Any
 
 import pytest
 from spectracut.edit import Clip, Edit, FrameRate, Gap, Track
@@ -43,7 +45,10 @@ EDIT = make_edit(
 )  # 2000 frames, boundaries at 1000 and 1700
 
 
-def beat(session: Session, name: str, free: int = 8000, caps: tuple[str, ...] = ("cuda", "nvenc")):
+GPU_CAPS = ("cuda", "nvenc")
+
+
+def beat(session: Session, name: str, free: int = 8000, caps: tuple[str, ...] = GPU_CAPS) -> None:
     hb = WorkerHeartbeat(
         name=name, gpu_model="RTX", vram_total_mb=12000, vram_free_mb=free, capabilities=list(caps)
     )
@@ -251,7 +256,9 @@ def _job(spec: dict[str, object], path: Path) -> None:
 
 
 @pytest.mark.skipif(not _have_ffmpeg(), reason="needs ffmpeg and ffprobe")
-@pytest.mark.parametrize("rate", [FrameRate(numerator=30000, denominator=1001), FrameRate(numerator=24)])
+@pytest.mark.parametrize(
+    "rate", [FrameRate(numerator=30000, denominator=1001), FrameRate(numerator=24)]
+)
 def test_two_segments_concat_without_a_seam(tmp_path: Path, rate: FrameRate) -> None:
     a = _source(tmp_path / "a.mp4", 3)
     b = _source(tmp_path / "b.mp4", 2)
@@ -298,3 +305,46 @@ def test_two_segments_concat_without_a_seam(tmp_path: Path, rate: FrameRate) -> 
         capture_output=True, check=True,
     ).stdout  # fmt: skip
     assert len(pcm) // 4 == round(Fraction(edit.duration) * SAMPLE_RATE / rate.fps)
+
+
+# --- job script with a fake ffmpeg ---------------------------------------------------------------
+
+
+def _job_module() -> Any:
+    spec = importlib.util.spec_from_file_location("rw_render_job", RENDER_JOB)
+    assert spec is not None and spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_job_script_writes_part_then_replaces_and_reports_failure(tmp_path: Path) -> None:
+    job = _job_module()
+    seen: list[list[str]] = []
+
+    def ok(argv: list[str]) -> int:
+        seen.append(argv)
+        Path(argv[-1]).write_bytes(b"seg")
+        return 0
+
+    out = tmp_path / "f.seg0.mov"
+    spec = tmp_path / "s.json"
+    body = {"mode": "segment", "otio": edit_to_otio_json(EDIT), "start_frame": 0}
+    spec.write_text(json.dumps({**body, "end_frame": 10, "output": str(out)}), encoding="utf-8")
+    assert job.main(["--spec", str(spec), "--encoder", "h264_nvenc", "--hwaccel", "cuda"], ok) == 0
+    argv = seen[0]
+    assert argv[-3:] == ["-f", "mov", str(out) + ".part"] and "h264_nvenc" in argv
+    assert out.read_bytes() == b"seg" and not Path(str(out) + ".part").exists()
+    assert spec.exists()  # only the agent's own temp spec files are removed
+
+    def fail(argv: list[str]) -> int:
+        Path(argv[-1]).write_bytes(b"half")
+        return 1
+
+    cat = tmp_path / "c.json"
+    final = tmp_path / "f.mp4"
+    cat.write_text(json.dumps({"mode": "concat", "segments": [str(out)], "output": str(final)}))
+    assert job.main(["--spec", str(cat), "--encoder", "libx264"], fail) == 1
+    assert out.exists() and not final.exists() and not Path(str(final) + ".part").exists()
+    assert job.main(["--spec", str(cat), "--encoder", "libx264"], ok) == 0
+    assert final.read_bytes() == b"seg" and not out.exists()  # segments removed after the concat

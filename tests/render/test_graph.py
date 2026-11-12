@@ -22,7 +22,11 @@ from reelwright.render.graph import (
     sample_at,
 )
 
-RATES = [FrameRate(numerator=24), FrameRate(numerator=30), FrameRate(numerator=30000, denominator=1001)]
+RATES = [
+    FrameRate(numerator=24),
+    FrameRate(numerator=30),
+    FrameRate(numerator=30000, denominator=1001),
+]
 
 
 def make_edit(rate: FrameRate, video: list[object], audio: list[object] | None = None) -> Edit:
@@ -115,10 +119,21 @@ def test_sample_positions_are_cumulative_not_per_frame() -> None:
     [
         ([clip("c1", "/m/a.mp4", 0, 30, speed=2.0)], "speed"),
         (
-            [clip("c1", "/m/a.mp4", 0, 30, ramps=[SpeedRamp(start=0, end=10, speed_from=1, speed_to=2)])],
+            [
+                clip(
+                    "c1",
+                    "/m/a.mp4",
+                    0,
+                    30,
+                    ramps=[SpeedRamp(start=0, end=10, speed_from=1, speed_to=2)],
+                )
+            ],
             "speed",
         ),
-        ([clip("c1", "/m/a.mp4", 0, 30), Transition(), clip("c2", "/m/b.mp4", 0, 30)], "transition"),
+        (
+            [clip("c1", "/m/a.mp4", 0, 30), Transition(), clip("c2", "/m/b.mp4", 0, 30)],
+            "transition",
+        ),
         ([clip("c1", "", 0, 30)], "no media"),
     ],
 )
