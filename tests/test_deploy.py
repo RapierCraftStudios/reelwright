@@ -311,7 +311,8 @@ def _tailnet_host(
     _shim(
         host,
         "curl",
-        f'echo "curl $*" >> "$SHIM_LOG"\ncase "$*" in *127.0.0.1*) exit {0 if loopback else 7};; esac\n',
+        'echo "curl $*" >> "$SHIM_LOG"\n'
+        f'case "$*" in *127.0.0.1*) exit {0 if loopback else 7};; esac\n',
     )
     status = '{"AllowFunnel": {"x:443": true}}' if funnel else "{}"
     _shim(
