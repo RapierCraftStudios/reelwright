@@ -254,6 +254,7 @@ and can't be automated.
 | `WS /api/prompter/:project/align` | Mic audio in, script position out | tailnet |
 | `/api/projects` CRUD | Projects | tailnet |
 | `/api/projects/:id/script` | Get/put/generate script, lock, fact-check | tailnet |
+| `/api/projects/:id/takes` | Camera take markers from the prompter (beat, line range, start time) | tailnet |
 | `POST /api/assets/manifest` | Watcher reports new footage | worker token |
 | `/api/projects/:id/edit` | Build rough cut, get OTIO, request render | tailnet |
 | `/api/jobs` | Job queue status (SSE `/api/events`) | tailnet |

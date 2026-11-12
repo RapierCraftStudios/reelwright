@@ -129,6 +129,78 @@ class TakeMarkRead(SQLModel):
     created_at: datetime
 
 
+# --- Camera take markers (issue #50: the prompter drives the DJI camera over Bluetooth) ---------
+
+
+class CameraTake(SQLModel, table=True):
+    """One camera recording (or, in continuous mode, one beat of it) started from the prompter.
+
+    `started_at` is the phone's wall clock when the camera acknowledged the record command, so the
+    rough cut (#11) can join camera files to script lines by their start time (see `match_take`).
+    """
+
+    __table_args__ = (UniqueConstraint("client_id", name="uq_cameratake_client_id"),)
+
+    id: int | None = Field(default=None, primary_key=True)
+    project_id: int = Field(foreign_key="project.id", index=True)
+    script_version_id: int = Field(foreign_key="scriptversion.id", index=True)
+    client_id: str = Field(max_length=36)
+    beat_slug: str = Field(max_length=64)
+    line_from: int
+    line_to: int
+    retake: bool = False
+    continuous: bool = False
+    camera: str = Field(default="", max_length=64)
+    started_at: datetime = Field(index=True)
+    stopped_at: datetime | None = None
+    created_at: datetime = Field(default_factory=_now)
+
+
+class CameraTakeCreate(SQLModel):
+    client_id: str = Field(min_length=1, max_length=36, description="client UUID; replays dedupe")
+    script_version: int = Field(ge=1, description="version number of the locked script read")
+    beat_slug: str = Field(min_length=1, max_length=64)
+    line_from: int = Field(ge=1)
+    line_to: int = Field(ge=1)
+    retake: bool = False
+    continuous: bool = False
+    camera: str = Field(default="", max_length=64)
+    started_at: datetime
+    stopped_at: datetime | None = None
+
+    @field_validator("started_at", "stopped_at")
+    @classmethod
+    def _aware(cls, value: datetime | None) -> datetime | None:
+        if value is not None and value.tzinfo is None:
+            raise ValueError("timestamps need a timezone (send an ISO 8601 timestamp with Z)")
+        return value
+
+    @model_validator(mode="after")
+    def _ordered(self) -> CameraTakeCreate:
+        if self.line_to < self.line_from:
+            raise ValueError("line_to must be at or after line_from")
+        if self.stopped_at is not None and self.stopped_at < self.started_at:
+            raise ValueError("stopped_at must be at or after started_at")
+        return self
+
+
+class CameraTakeRead(SQLModel):
+    id: int
+    project_id: int
+    script_version_id: int
+    script_version: int
+    client_id: str
+    beat_slug: str
+    line_from: int
+    line_to: int
+    retake: bool
+    continuous: bool
+    camera: str
+    started_at: datetime
+    stopped_at: datetime | None
+    created_at: datetime
+
+
 # --- Render workers and jobs (spike § Runtime topology) ---------------------------------------
 
 
