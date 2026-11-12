@@ -5,6 +5,9 @@ import { type ChangeEvent, useCallback, useEffect, useRef, useState } from "reac
 import { Link, useParams } from "react-router-dom";
 
 import { ApiError, type Script, type TakeMarkCreate, getScript } from "../api";
+import { CameraPanel } from "../prompter/camera/CameraPanel";
+import { CameraController, type CameraState } from "../prompter/camera/djiCommands";
+import { TakeSession } from "../prompter/camera/takes";
 import { flushPending, pendingCount, submitMark } from "../prompter/marks";
 import { type PrompterLine, Scroller, type ScrollerHandle } from "../prompter/Scroller";
 import {
@@ -109,7 +112,27 @@ function NumberSetting({ label, unit, value, limits, onCommit }: NumberSettingPr
   );
 }
 
-export function PrompterRoute() {
+export interface PrompterRouteProps {
+  /** The camera to drive (tests inject one over a mock BLE device); defaults to Web Bluetooth. */
+  camera?: CameraController;
+}
+
+/** One controller per page: pairing state lives across re-renders, not across projects' scripts. */
+function useCamera(injected?: CameraController): [CameraController, CameraState] {
+  const [camera] = useState(() => injected ?? new CameraController());
+  const [state, setState] = useState<CameraState>(() => camera.state);
+  useEffect(() => {
+    const unsubscribe = camera.subscribe(setState);
+    setState(camera.state);
+    // Reconnect to a remembered camera without a chooser; nothing happens when none was paired.
+    if (camera.supported && camera.paired && camera.state.phase === "empty") void camera.restore();
+    return unsubscribe;
+  }, [camera]);
+  useEffect(() => () => (injected ? undefined : camera.dispose()), [camera, injected]);
+  return [camera, state];
+}
+
+export function PrompterRoute({ camera: injectedCamera }: PrompterRouteProps = {}) {
   const { id = "" } = useParams();
   const [phase, setPhase] = useState<Phase>("loading");
   const [doc, setDoc] = useState<CachedScript | null>(null);
@@ -123,6 +146,9 @@ export function PrompterRoute() {
   const reducedMotion = useReducedMotion();
   const scroller = useRef<ScrollerHandle>(null);
   const startedAt = useRef<number | null>(null);
+  const [camera, cameraState] = useCamera(injectedCamera);
+  const cameraOn = cameraState.phase === "connected";
+  const session = useRef<{ key: string; take: TakeSession } | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -183,6 +209,34 @@ export function PrompterRoute() {
 
   const lines = doc?.lines ?? [];
   const canRead = phase === "ready" && lines.length > 0;
+  const activeLine = lines.length ? lines[Math.min(activeIndex, lines.length - 1)] : undefined;
+
+  /** The take session for this script, only while a camera is connected (no camera calls otherwise). */
+  const takes = useCallback((): TakeSession | null => {
+    if (!cameraOn || !doc) return null;
+    const key = `${id}:${doc.version}`;
+    if (session.current?.key !== key) {
+      const take = new TakeSession({
+        projectId: id,
+        scriptVersion: doc.version,
+        camera,
+        continuous: settings.cameraContinuous,
+        onMarker: (body, result) => {
+          setPending(pendingCount(id));
+          if (result === "queued") setNotice(`Take ${body.beat_slug} saved here, will sync`);
+        },
+        onError: (error) => setNotice(`Camera: ${error instanceof Error ? error.message : String(error)}`),
+      });
+      session.current = { key, take };
+    }
+    session.current.take.continuous = settings.cameraContinuous;
+    return session.current.take;
+  }, [camera, cameraOn, doc, id, settings.cameraContinuous]);
+
+  // Feed line changes to the take: a new beat ends it (and, normally, the recording).
+  useEffect(() => {
+    if (activeLine && session.current) void session.current.take.line(activeLine);
+  }, [activeLine]);
 
   const markRetake = useCallback(async () => {
     if (!doc || doc.lines.length === 0) return;
@@ -196,6 +250,7 @@ export function PrompterRoute() {
       marked_at: new Date(now).toISOString(),
       offset_ms: startedAt.current === null ? 0 : Math.max(0, now - startedAt.current),
     };
+    session.current?.take.retake();
     setNotice(`Retake marked at line ${line.lineNo}`);
     const result = await submitMark(id, body);
     setPending(pendingCount(id));
@@ -207,14 +262,19 @@ export function PrompterRoute() {
       if (!canRead) return;
       if (action === "toggle") {
         if (!playing && startedAt.current === null) startedAt.current = Date.now();
+        const take = takes();
+        if (take && activeLine) void (playing ? take.pause() : take.go(activeLine));
         setPlaying(!playing);
+      } else if (action === "stop") {
+        setPlaying(false);
+        void takes()?.stop();
       } else if (action === "back") {
         scroller.current?.backOneLine();
       } else {
         void markRetake();
       }
     },
-    [canRead, markRetake, playing],
+    [activeLine, canRead, markRetake, playing, takes],
   );
 
   const runRef = useRef(run);
@@ -242,6 +302,11 @@ export function PrompterRoute() {
         <button type="button" onClick={() => run("toggle")} disabled={!canRead}>
           {playing ? "Pause" : "Start"}
         </button>
+        {cameraOn && (
+          <button type="button" onClick={() => run("stop")} disabled={!canRead}>
+            Stop
+          </button>
+        )}
         <button type="button" onClick={() => run("back")} disabled={!canRead}>
           Back one line
         </button>
@@ -260,6 +325,15 @@ export function PrompterRoute() {
           {notice}
         </p>
       </header>
+
+      <CameraPanel
+        state={cameraState}
+        setup={settingsOpen}
+        continuous={settings.cameraContinuous}
+        onContinuousChange={(cameraContinuous) => update({ cameraContinuous })}
+        onPair={() => void camera.pair()}
+        onReconnect={() => void camera.reconnect()}
+      />
 
       {outOfSync && phase !== "loading" && (
         <div className="banner banner-error prompter-banner" role="alert">
@@ -345,7 +419,10 @@ export function PrompterRoute() {
           reducedMotion={reducedMotion}
           activeIndex={activeIndex}
           onActiveIndexChange={setActiveIndex}
-          onEnd={() => setPlaying(false)}
+          onEnd={() => {
+            setPlaying(false);
+            void session.current?.take.pause();
+          }}
           onTap={() => run("toggle")}
         />
       )}
