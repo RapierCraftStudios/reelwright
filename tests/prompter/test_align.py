@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 
-from reelwright.prompter.align import Position, ScriptAligner, ScriptLine, normalize, spoken_lines
+from reelwright.prompter.align import Position, ScriptAligner, SpokenLine, normalize, spoken_lines
 from reelwright.script import parse
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -22,7 +22,7 @@ def _fixture(name: str) -> dict[str, Any]:
 
 def _aligner(lines: list[str]) -> ScriptAligner:
     # Line numbers as a script would give them: spaced out, not equal to the index.
-    return ScriptAligner([ScriptLine(10 + 2 * i, text) for i, text in enumerate(lines)])
+    return ScriptAligner([SpokenLine(10 + 2 * i, text) for i, text in enumerate(lines)])
 
 
 def _replay(name: str) -> list[Position | None]:

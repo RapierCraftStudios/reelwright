@@ -37,7 +37,7 @@ FUZZY_RATIO = 0.75
 
 
 @dataclass(frozen=True)
-class ScriptLine:
+class SpokenLine:
     """One spoken line as the prompter shows it: its source line number and its text."""
 
     line_no: int
@@ -51,10 +51,10 @@ class Position:
     confidence: float
 
 
-def spoken_lines(script: Script) -> list[ScriptLine]:
+def spoken_lines(script: Script) -> list[SpokenLine]:
     """Spoken, non-blank lines in reading order: the same list the prompter view renders."""
     return [
-        ScriptLine(line.line_no, line.text)
+        SpokenLine(line.line_no, line.text)
         for beat in script.beats
         for line in beat.lines
         if line.kind == "spoken" and line.text.strip()
@@ -77,7 +77,7 @@ def similar(heard: str, expected: str) -> bool:
 
 
 class ScriptAligner:
-    def __init__(self, lines: Sequence[ScriptLine]) -> None:
+    def __init__(self, lines: Sequence[SpokenLine]) -> None:
         if not lines:
             raise ValueError("script has no spoken lines")
         self.lines = list(lines)
