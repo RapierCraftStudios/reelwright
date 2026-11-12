@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """camera take
 
-Revision ID: 0008
+Revision ID: 0009
 Revises: 0007
-Create Date: 2026-11-12 14:12:07.069378
+Create Date: 2026-11-12 14:33:01.335645
 """
 
 from collections.abc import Sequence
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 import sqlmodel.sql.sqltypes
 from alembic import op
 
-revision: str = "0008"
-down_revision: str | Sequence[str] | None = "0007"
+revision: str = "0009"
+down_revision: str | None = "0007"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
