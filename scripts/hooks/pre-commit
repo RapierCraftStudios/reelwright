@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Blocks a commit that stages any secret value from the secrets file, any .env file, or a key-shaped string.
+# Install: git config core.hooksPath scripts/hooks
+set -euo pipefail
+f="${REELWRIGHT_SECRETS:-$HOME/.config/reelwright/secrets.env}"
+staged=$(git diff --cached --name-only --diff-filter=ACM)
+if echo "$staged" | grep -Eq '(^|/)\.env($|\.)' && ! echo "$staged" | grep -Eq '(^|/)\.env\.example$'; then
+  echo "pre-commit: refusing to commit a .env file" >&2; exit 1; fi
+diff=$(git diff --cached -U0 --no-color)
+if [ -r "$f" ]; then
+  while IFS='=' read -r k v; do
+    [ -n "${v:-}" ] && [ ${#v} -ge 12 ] || continue
+    if grep -qF -- "$v" <<<"$diff"; then echo "pre-commit: staged changes contain the value of $k — remove it" >&2; exit 1; fi
+  done < <(grep -E '^[A-Z0-9_]+=' "$f")
+fi
+if grep -Eq '^\+.*(sk-[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{30,}|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----)' <<<"$diff"; then
+  echo "pre-commit: staged changes look like they contain a secret" >&2; exit 1; fi

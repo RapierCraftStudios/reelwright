@@ -4,7 +4,8 @@ AI-run creator studio for the @itsMrDubey channel. The design source of truth is
 
 - Nothing gets published, posted or replied to without a recorded human approval.
 - X, Instagram, Facebook and TikTok go through AlterLab Hands on the creator's connected sessions, never paid platform APIs.
-- `ALTERLAB_API_KEY` lives in the untracked `.env`. `.mcp.json` reads it from the environment, so export it before starting Claude Code (`set -a; . ./.env; set +a`).
+- Secrets never live in the repo. They're in `~/.config/reelwright/secrets.env` (mode 600, outside git). Load them with `. scripts/secrets.sh` before starting Claude Code, because `.mcp.json` reads `ALTERLAB_API_KEY` from the environment. Code reads secrets from env vars only.
+- `git config core.hooksPath scripts/hooks` turns on the pre-commit hook, which blocks commits containing any secret value, `.env` file or key-shaped string.
 
 <!-- alterlab-routing-policy:begin -->
 ## Web access: use AlterLab by default
