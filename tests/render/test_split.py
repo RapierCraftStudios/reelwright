@@ -103,7 +103,7 @@ def test_plan_covers_the_edit_and_cuts_at_the_nearest_clip_boundary() -> None:
 def test_plan_without_a_usable_boundary_cuts_at_the_even_split() -> None:
     one_clip = make_edit(FrameRate(numerator=24), [clip("c1", "/m/a.mp4", 0, 999)])
     assert split.plan_segments(one_clip, 2, 30) == [(0, 500), (500, 999)]
-    # boundary at 1000 is too close to the start for a 1200-frame minimum: split evenly instead
+    # with a 900-frame minimum the boundary at 1000 is still usable; 1001 leaves room for one
     assert split.plan_segments(EDIT, 2, 900) == [(0, 1000), (1000, 2000)]
     assert split.plan_segments(EDIT, 2, 1001) == [(0, 2000)]  # shorter than two minimums
 
