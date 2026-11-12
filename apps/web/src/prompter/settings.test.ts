@@ -32,7 +32,7 @@ describe("prompter settings", () => {
   });
 
   it("round-trips through localStorage per device", () => {
-    const custom = { fontSize: 72, speed: 120, margin: 12, mirror: true, lensMode: "above-lens", dyslexiaFont: true } as const;
+    const custom = { fontSize: 72, speed: 120, margin: 12, mirror: true, lensMode: "above-lens", dyslexiaFont: true, cameraContinuous: true } as const;
     saveSettings(custom);
     expect(JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? "null")).toEqual(custom);
     expect(loadSettings()).toEqual(custom);
@@ -53,5 +53,20 @@ describe("prompter settings", () => {
     for (const key of ["r", "R", "Enter"]) expect(KEYMAP[key]).toBe("retake");
     expect(actionForKey({ key: "r", ctrlKey: true, metaKey: false, altKey: false })).toBeNull();
     expect(actionForKey({ key: "x", ctrlKey: false, metaKey: false, altKey: false })).toBeNull();
+  });
+
+  it("defaults cameraContinuous to off and keeps older saved settings loading", () => {
+    expect(DEFAULT_SETTINGS.cameraContinuous).toBe(false);
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ fontSize: 60, mirror: true }));
+    const loaded = loadSettings();
+    expect(loaded).toMatchObject({ fontSize: 60, mirror: true, cameraContinuous: false });
+    expect(normalizeSettings({ cameraContinuous: true }).cameraContinuous).toBe(true);
+    expect(normalizeSettings({ cameraContinuous: "yes" }).cameraContinuous).toBe(false);
+  });
+
+  it("maps s, S and Escape to stop for pedals and keyboards", () => {
+    for (const key of ["s", "S", "Escape"]) expect(KEYMAP[key]).toBe("stop");
+    expect(actionForKey({ key: "Escape", ctrlKey: false, metaKey: false, altKey: false })).toBe("stop");
+    expect(actionForKey({ key: "s", ctrlKey: true, metaKey: false, altKey: false })).toBeNull();
   });
 });

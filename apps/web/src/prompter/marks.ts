@@ -1,26 +1,37 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Retake marks: posted to the API, queued in localStorage while the connection is down and flushed
-// in order once it is back, so a mark pressed mid-take is never lost.
-import { ApiError, type TakeMarkCreate, postTakeMark } from "../api";
+// Retake marks and camera take markers (#50): posted to the API, queued in localStorage while the
+// connection is down and flushed in order once it is back, so nothing pressed mid-take is lost.
+import { ApiError, type TakeCreate, type TakeMarkCreate, postTake, postTakeMark } from "../api";
 
 export const PENDING_KEY = "rw.prompter.pendingMarks";
 
+/** A queued retake mark. Entries saved before #50 have no type and are retake marks. */
 export interface PendingMark {
+  type?: "mark";
   projectId: string;
   body: TakeMarkCreate;
 }
 
-function readQueue(): PendingMark[] {
+/** A queued camera take marker. */
+export interface PendingTake {
+  type: "take";
+  projectId: string;
+  body: TakeCreate;
+}
+
+export type PendingEntry = PendingMark | PendingTake;
+
+function readQueue(): PendingEntry[] {
   try {
     const raw = localStorage.getItem(PENDING_KEY);
     const parsed: unknown = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? (parsed as PendingMark[]) : [];
+    return Array.isArray(parsed) ? (parsed as PendingEntry[]) : [];
   } catch {
     return [];
   }
 }
 
-function writeQueue(queue: PendingMark[]): void {
+function writeQueue(queue: PendingEntry[]): void {
   try {
     if (queue.length) localStorage.setItem(PENDING_KEY, JSON.stringify(queue));
     else localStorage.removeItem(PENDING_KEY);
@@ -47,10 +58,11 @@ async function drain(): Promise<number> {
     const [head] = readQueue();
     if (!head) return 0;
     try {
-      await postTakeMark(head.projectId, head.body);
+      if (head.type === "take") await postTake(head.projectId, head.body);
+      else await postTakeMark(head.projectId, head.body);
     } catch (error) {
       if (retryable(error)) return readQueue().length;
-      console.warn("dropping a retake mark the API refused", head, error);
+      console.warn(`dropping a ${head.type === "take" ? "take marker" : "retake mark"} the API refused`, head, error);
     }
     writeQueue(readQueue().slice(1));
   }
@@ -65,10 +77,19 @@ export function flushPending(): Promise<number> {
   return flushing;
 }
 
-/** Queue a mark and try to send everything. Resolves "sent" or "queued" (sent when back online). */
-export async function submitMark(projectId: string, body: TakeMarkCreate): Promise<"sent" | "queued"> {
+async function submit(entry: PendingEntry): Promise<"sent" | "queued"> {
   if (flushing) await flushing;
-  writeQueue([...readQueue(), { projectId, body }]);
+  writeQueue([...readQueue(), entry]);
   const remaining = await flushPending();
   return remaining > 0 ? "queued" : "sent";
+}
+
+/** Queue a mark and try to send everything. Resolves "sent" or "queued" (sent when back online). */
+export function submitMark(projectId: string, body: TakeMarkCreate): Promise<"sent" | "queued"> {
+  return submit({ projectId, body });
+}
+
+/** Queue a camera take marker behind any earlier entries and try to send everything. */
+export function submitTake(projectId: string, body: TakeCreate): Promise<"sent" | "queued"> {
+  return submit({ type: "take", projectId, body });
 }

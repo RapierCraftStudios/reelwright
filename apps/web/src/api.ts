@@ -205,3 +205,36 @@ export function postTakeMark(projectId: number | string, body: TakeMarkCreate): 
 export function listTakeMarks(projectId: number | string): Promise<TakeMark[]> {
   return call<TakeMark[]>(`${prompterUrl(projectId)}/marks`);
 }
+
+/** A camera take marker posted by the prompter (#50): which beat and lines a recording covers. */
+export interface TakeCreate {
+  /** Client UUID; a replay of the same id returns the stored take instead of a duplicate. */
+  client_id: string;
+  script_version: number;
+  beat_slug: string;
+  line_from: number;
+  line_to: number;
+  retake: boolean;
+  continuous: boolean;
+  /** ISO 8601 UTC wall clock when the camera acknowledged the record command. */
+  started_at: string;
+  stopped_at: string | null;
+  camera: string;
+}
+
+export interface Take extends TakeCreate {
+  id: number;
+  project_id: number;
+  script_version_id: number;
+  created_at: string;
+}
+
+const takesUrl = (projectId: number | string) => `/api/projects/${projectId}/takes`;
+
+export function postTake(projectId: number | string, body: TakeCreate): Promise<Take> {
+  return call<Take>(takesUrl(projectId), jsonInit("POST", body));
+}
+
+export function listTakes(projectId: number | string): Promise<Take[]> {
+  return call<Take[]>(takesUrl(projectId));
+}

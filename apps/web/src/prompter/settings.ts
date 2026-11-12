@@ -16,6 +16,8 @@ export interface PrompterSettings {
   /** Where the reading line sits: mid-upper for a beam splitter, near the lens edge above the lens. */
   lensMode: LensMode;
   dyslexiaFont: boolean;
+  /** Camera control (#50): keep one continuous recording and only mark beats, instead of a file per beat. */
+  cameraContinuous: boolean;
 }
 
 export const SETTINGS_KEY = "rw.prompter.settings";
@@ -33,6 +35,7 @@ export const DEFAULT_SETTINGS: PrompterSettings = {
   mirror: false,
   lensMode: "beam-splitter",
   dyslexiaFont: false,
+  cameraContinuous: false,
 };
 
 const LENS_MODES: readonly LensMode[] = ["beam-splitter", "above-lens"];
@@ -53,6 +56,8 @@ export function normalizeSettings(raw: unknown): PrompterSettings {
     mirror: typeof r.mirror === "boolean" ? r.mirror : DEFAULT_SETTINGS.mirror,
     lensMode: LENS_MODES.includes(r.lensMode as LensMode) ? (r.lensMode as LensMode) : DEFAULT_SETTINGS.lensMode,
     dyslexiaFont: typeof r.dyslexiaFont === "boolean" ? r.dyslexiaFont : DEFAULT_SETTINGS.dyslexiaFont,
+    cameraContinuous:
+      typeof r.cameraContinuous === "boolean" ? r.cameraContinuous : DEFAULT_SETTINGS.cameraContinuous,
   };
 }
 
@@ -81,7 +86,7 @@ export function saveSettings(settings: PrompterSettings): void {
   }
 }
 
-export type PrompterAction = "toggle" | "back" | "retake";
+export type PrompterAction = "toggle" | "back" | "retake" | "stop";
 
 /** Keyboard and pedal keys → action. One place so voice-follow (#7) and camera control (#50) can extend it. */
 export const KEYMAP: Readonly<Record<string, PrompterAction>> = {
@@ -95,6 +100,9 @@ export const KEYMAP: Readonly<Record<string, PrompterAction>> = {
   r: "retake",
   R: "retake",
   Enter: "retake",
+  s: "stop",
+  S: "stop",
+  Escape: "stop",
 };
 
 export function actionForKey(event: Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "altKey">): PrompterAction | null {
