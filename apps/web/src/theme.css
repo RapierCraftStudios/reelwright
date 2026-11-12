@@ -438,6 +438,29 @@ textarea {
   padding: 0.35rem;
 }
 
+/* Voice follow on: an accent fill plus a dot, so the state never relies on colour alone. */
+.prompter-voice[aria-pressed="true"] {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #000000;
+  font-weight: 600;
+}
+
+.prompter-voice[aria-pressed="true"]::before {
+  content: "● ";
+}
+
+.prompter-latency {
+  align-self: center;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.prompter-latency [data-testid="prompter-latency"] {
+  color: var(--color-text);
+}
+
 .prompter-notice {
   flex: 1 1 10rem;
   min-width: 0;

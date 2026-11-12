@@ -26,6 +26,7 @@ class JobKind(StrEnum):
     proxy = "proxy"
     render = "render"
     transcribe = "transcribe"
+    qa = "qa"
 
 
 class JobStatus(StrEnum):
@@ -41,6 +42,7 @@ DEFAULT_CAPS: dict[JobKind, tuple[str, ...]] = {
     JobKind.proxy: ("nvenc",),
     JobKind.render: ("nvenc",),
     JobKind.transcribe: ("cuda",),
+    JobKind.qa: (),  # one ffmpeg analysis pass on the CPU: any live worker
 }
 
 

@@ -1,11 +1,28 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Script, ScriptDoc } from "../api";
 import { PENDING_KEY } from "../prompter/marks";
 import { PROMPTER_EMPTY_MESSAGE, LOST_MESSAGE, PrompterRoute } from "./prompter";
+
+const voice = vi.hoisted(() => ({
+  instances: [] as { options: { onPosition(lineNo: number): void; onError(code: string): void }; start: unknown; stop: unknown; seek: unknown }[],
+}));
+
+vi.mock("../prompter/voiceFollow", () => ({
+  VoiceFollow: vi.fn().mockImplementation(function (this: Record<string, unknown>, options: unknown) {
+    Object.assign(this, {
+      options,
+      start: vi.fn(async () => {}),
+      stop: vi.fn(),
+      seek: vi.fn(),
+      p95Ms: () => 12,
+    });
+    voice.instances.push(this as never);
+  }),
+}));
 
 const SCRIPT: Script = {
   front_matter: { format: "long", working_title: "Test" },
@@ -76,7 +93,10 @@ function renderPrompter() {
   );
 }
 
-beforeEach(() => localStorage.clear());
+beforeEach(() => {
+  localStorage.clear();
+  voice.instances.length = 0;
+});
 
 afterEach(() => {
   cleanup();
@@ -198,5 +218,49 @@ describe("PrompterRoute", () => {
     fireEvent.keyDown(field, { key: "r" });
     await new Promise((r) => setTimeout(r, 20));
     expect(fetchMock.mock.calls.some(([u]) => String(u).endsWith("/marks"))).toBe(false);
+  });
+
+  it("disables the voice follow toggle without a script", async () => {
+    stubFetch(() => json({ detail: "no script yet" }, 404));
+    renderPrompter();
+    await screen.findByText(PROMPTER_EMPTY_MESSAGE);
+    const toggle = screen.getByRole("button", { name: "Voice follow" });
+    expect(toggle.hasAttribute("disabled")).toBe(true);
+    expect(toggle.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("keeps the active line when voice follow is switched on and off", async () => {
+    stubFetch(() => json(doc()));
+    renderPrompter();
+    const text = await screen.findByTestId("prompter-text");
+    const active = () => text.querySelector("[data-active]")?.getAttribute("data-line");
+    const toggle = screen.getByRole("button", { name: "Voice follow" });
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-pressed")).toBe("true");
+    expect(voice.instances).toHaveLength(1);
+    const follow = voice.instances[0];
+    expect(follow.start).toHaveBeenCalledWith({ scriptVersion: 2, lineNo: 8 });
+    act(() => follow.options.onPosition(12));
+    expect(active()).toBe("12");
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-pressed")).toBe("false");
+    expect(follow.stop).toHaveBeenCalled();
+    expect(active()).toBe("12");
+    // Back on: listening resumes from the current line, not the top.
+    fireEvent.click(toggle);
+    expect(voice.instances[1].start).toHaveBeenCalledWith({ scriptVersion: 2, lineNo: 12 });
+    fireEvent.keyDown(window, { key: "ArrowUp" });
+    expect(voice.instances[1].seek).toHaveBeenCalledWith(8);
+  });
+
+  it("falls back to manual with a notice when voice follow fails", async () => {
+    stubFetch(() => json(doc()));
+    renderPrompter();
+    await screen.findByTestId("prompter-text");
+    const toggle = screen.getByRole("button", { name: "Voice follow" });
+    fireEvent.click(toggle);
+    act(() => voice.instances[0].options.onError("mic_denied"));
+    expect(toggle.getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByTestId("prompter-status").textContent).toMatch(/Microphone blocked/);
   });
 });

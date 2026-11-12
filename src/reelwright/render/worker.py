@@ -99,11 +99,25 @@ def _render(encoder: str) -> ArgvBuilder:
     return build
 
 
+QA_JOB = TRANSCRIBE_JOB.with_name("qa.py")
+
+
+def _qa() -> ArgvBuilder:
+    """Pre-publish media QA of a final render via the job script; it writes a JSON report."""
+
+    def build(payload: Mapping[str, Any]) -> list[str]:
+        src, dst = _io(payload)
+        return [sys.executable, str(QA_JOB), "--input", src, "--output", dst]
+
+    return build
+
+
 GPU_EXECUTORS: dict[JobKind, ArgvBuilder] = {
     JobKind.transcode: _ffmpeg(True, "h264_nvenc", "-preset", "p5"),
     JobKind.proxy: _ffmpeg(True, "h264_nvenc", "-vf", "scale=-2:720", "-preset", "p1"),
     JobKind.render: _render("h264_nvenc"),
     JobKind.transcribe: _transcribe("cuda", "float16"),
+    JobKind.qa: _qa(),  # CPU work on both tables: ffmpeg analysis filters have no GPU path
 }
 
 CPU_EXECUTORS: dict[JobKind, ArgvBuilder] = {
@@ -111,6 +125,7 @@ CPU_EXECUTORS: dict[JobKind, ArgvBuilder] = {
     JobKind.proxy: _ffmpeg(False, "libx264", "-vf", "scale=-2:720", "-preset", "veryfast"),
     JobKind.render: _render("libx264"),
     JobKind.transcribe: _transcribe("cpu", "int8"),
+    JobKind.qa: _qa(),
 }
 
 

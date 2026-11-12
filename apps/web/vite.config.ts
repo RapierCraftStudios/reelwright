@@ -7,6 +7,7 @@ const api = "http://127.0.0.1:8000";
 export default defineConfig({
   plugins: [react()],
   build: { outDir: "dist", emptyOutDir: true },
-  server: { proxy: { "/api": api, "/healthz": api } },
+  // ws: true carries the voice-follow WebSocket (/api/prompter/:id/align) under pnpm dev.
+  server: { proxy: { "/api": { target: api, ws: true }, "/healthz": api } },
   test: { environment: "jsdom", globals: true },
 });

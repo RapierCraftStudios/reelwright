@@ -4,7 +4,8 @@
 POST takes the Edit's OTIO and an absolute .mp4 path on the capture PC. The render is split
 across the free GPU cards that the picker reports, then concatenated beside that path. The preview
 proxy that a worker uploads to PUT .../preview goes through the proxy disk budget and free-disk
-floor (507 when a write would cross either). No raw footage is stored on the dev server.
+floor (507 when a write would cross either). A worker runs media QA next to the final file and
+PUTs only its JSON report to .../qa. No raw footage or final render is stored on the dev server.
 """
 
 from __future__ import annotations
@@ -17,7 +18,7 @@ from sqlmodel import Session, col, select
 
 from reelwright.api.assets import _sync_chunks
 from reelwright.api.workers import WorkerAuth
-from reelwright.db.models import Project, Render, RenderCreate, RenderRead
+from reelwright.db.models import Project, QAReport, Render, RenderCreate, RenderRead
 from reelwright.db.session import get_session
 from reelwright.ingest import proxy
 from reelwright.render import registry, split
@@ -96,3 +97,23 @@ async def put_preview(
     session.commit()
     session.refresh(render)
     return split.render_to_read(render)
+
+
+@router.put("/{render_id}/qa", response_model=RenderRead, dependencies=WorkerAuth)
+def put_qa(project_id: int, render_id: int, body: QAReport, session: SessionDep) -> RenderRead:
+    """A worker uploads the media QA report of the final render; its verdict gates publishing."""
+    render = _render(session, project_id, render_id)
+    render.qa_report = body.model_dump_json()
+    render.qa_status = "passed" if body.passed else "failed"
+    session.add(render)
+    session.commit()
+    session.refresh(render)
+    return split.render_to_read(render)
+
+
+@router.get("/{render_id}/qa", response_model=QAReport)
+def get_qa(project_id: int, render_id: int, session: SessionDep) -> QAReport:
+    render = _render(session, project_id, render_id)
+    if render.qa_report is None:
+        raise HTTPException(status_code=404, detail="qa report not ready")
+    return QAReport.model_validate_json(render.qa_report)
