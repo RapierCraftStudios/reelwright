@@ -29,7 +29,8 @@ def test_silence_over_600_ms_is_trimmed_to_a_natural_gap() -> None:
 
 def test_shorter_pause_is_kept() -> None:
     spans = cut_take(1, [w("hello", 1.0, 1.3), w("there", 1.8, 2.1)])
-    assert spans == [Span(1, pytest.approx(1.0 - PAD_S), pytest.approx(2.1 + PAD_S))]  # type: ignore[arg-type]
+    assert len(spans) == 1
+    assert (spans[0].start, spans[0].end) == pytest.approx((1.0 - PAD_S, 2.1 + PAD_S))
 
 
 def test_isolated_filler_is_removed() -> None:

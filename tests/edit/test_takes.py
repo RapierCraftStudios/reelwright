@@ -41,7 +41,7 @@ def pick(marks: list[RetakeMark] | None = None) -> float:
     chosen, missing = pick_best_takes(script_lines(script), takes)
     assert missing == []
     assert len(chosen) == 1
-    return chosen[0].attempt.start
+    return float(chosen[0].attempt.start)
 
 
 def test_aligns_three_attempts_and_scores_the_fumble_lower() -> None:
