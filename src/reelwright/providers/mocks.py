@@ -15,14 +15,22 @@ from spectracut.providers.mock_text import MockTextProvider
 
 @dataclass
 class MockYouTube:
-    """Records uploads; returns canned analytics."""
+    """Records uploads, thumbnails and caption tracks; returns canned analytics."""
 
     uploads: list[dict[str, Any]] = field(default_factory=list)
+    thumbnails: list[dict[str, Any]] = field(default_factory=list)
+    captions: list[dict[str, Any]] = field(default_factory=list)
 
     def upload(self, path: str, title: str, **meta: Any) -> str:
         video_id = f"mock-{len(self.uploads) + 1}"
         self.uploads.append({"id": video_id, "path": path, "title": title, **meta})
         return video_id
+
+    def set_thumbnail(self, video_id: str, path: str) -> None:
+        self.thumbnails.append({"id": video_id, "path": path})
+
+    def insert_caption(self, video_id: str, srt: str, language: str) -> None:
+        self.captions.append({"id": video_id, "srt": srt, "language": language})
 
     def analytics(self, video_id: str) -> dict[str, Any]:
         return {"video_id": video_id, "views": 0, "watch_time_s": 0, "ctr": 0.0, "retention": []}

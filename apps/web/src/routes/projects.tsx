@@ -47,6 +47,9 @@ export function ProjectsRoute() {
   return (
     <main>
       <h1>Projects</h1>
+      <nav aria-label="Dashboard">
+        <a href="/approvals">Approvals</a>
+      </nav>
       <form onSubmit={onSubmit} aria-label="New project">
         <label>
           Title
