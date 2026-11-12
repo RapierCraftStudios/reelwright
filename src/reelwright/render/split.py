@@ -5,7 +5,9 @@
 splits the timeline into that many segments, at most two, and queues one ``render`` job per
 segment. ``advance`` runs on every job completion. When all segments are done it queues one concat
 job. When the concat is done it records the output (on the capture PC, next to the segments) and
-queues a preview proxy, which the worker uploads to ``/api/projects/{id}/renders/{rid}/preview``.
+queues a preview proxy, which the worker uploads to ``/api/projects/{id}/renders/{rid}/preview``,
+and then a media QA job, whose JSON report the worker uploads to ``.../renders/{rid}/qa``. The QA
+verdict lives in ``Render.qa_status`` beside the render lifecycle, not in it.
 """
 
 from __future__ import annotations
@@ -21,7 +23,7 @@ from typing import Any
 from spectracut.edit import Edit, Transition, from_otio
 from sqlmodel import Session
 
-from reelwright.db.models import Project, Render, RenderJob, RenderRead
+from reelwright.db.models import Project, QAReport, Render, RenderJob, RenderRead
 from reelwright.render import queue
 from reelwright.render.graph import build_render
 from reelwright.render.picker import rank
@@ -188,9 +190,12 @@ def advance(session: Session, job: RenderJob) -> Render | None:
     render = session.get(Render, int(render_id))
     if render is None:
         return None
+    outputs: dict[str, Any] = json.loads(job.outputs)
+    if job.kind == JobKind.qa:
+        _qa_done(session, render, job)
+        return render
     if render.status in (RenderStatus.done, RenderStatus.failed):
         return render
-    outputs: dict[str, Any] = json.loads(job.outputs)
     if job.status == JobStatus.failed:
         _fail(session, render, job, outputs)
         return render
@@ -223,6 +228,7 @@ def _segment_done(session: Session, render: Render) -> None:
         "mode": Mode.concat.value,
         "segments": segments,
         "output": render.target_path,
+        "master": True,  # voice cleanup and loudness normalisation over the joined audio
     }
     # Stream copy plus one AAC encode: any live worker can do it, no GPU needed.
     job = queue.enqueue(session, JobKind.render, payload, required_caps=())
@@ -236,6 +242,24 @@ def preview_upload_path(render: Render) -> str:
     return f"/api/projects/{render.project_id}/renders/{render.id}/preview"
 
 
+def qa_upload_path(render: Render) -> str:
+    return f"/api/projects/{render.project_id}/renders/{render.id}/qa"
+
+
+QA_PENDING = "pending"
+QA_ERROR = "error"
+
+
+def _qa_done(session: Session, render: Render, job: RenderJob) -> None:
+    """A finished QA job: the verdict arrives with the report PUT; a failed job is an error."""
+    if job.status != JobStatus.failed or render.qa_status not in (None, QA_PENDING):
+        return
+    render.qa_status = QA_ERROR
+    session.add(render)
+    session.commit()
+    session.refresh(render)
+
+
 def _concat_done(session: Session, render: Render, output: str) -> None:
     render.output_path = output
     payload = {
@@ -246,6 +270,16 @@ def _concat_done(session: Session, render: Render, output: str) -> None:
     }
     job = queue.enqueue(session, JobKind.proxy, payload)
     render.preview_job_id = job.id
+    qa_payload = {
+        "render_id": render.id,
+        "input": output,
+        "output": f"rw-render-qa-{render.id}.json",
+        "upload": qa_upload_path(render),
+        "content_type": "application/json",
+    }
+    qa_job = queue.enqueue(session, JobKind.qa, qa_payload, required_caps=())
+    render.qa_job_id = qa_job.id
+    render.qa_status = QA_PENDING
     render.status = RenderStatus.previewing
     session.add(render)
     session.commit()
@@ -265,4 +299,6 @@ def render_to_read(render: Render) -> RenderRead:
         preview_path=render.preview_path,
         error=render.error,
         created_at=render.created_at,
+        qa_status=render.qa_status,
+        qa=QAReport.model_validate_json(render.qa_report) if render.qa_report else None,
     )
