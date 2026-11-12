@@ -18,6 +18,7 @@ from reelwright.render.worker import (
     BELOW_NORMAL_PRIORITY_CLASS,
     CPU_EXECUTORS,
     GPU_EXECUTORS,
+    QA_JOB,
     RENDER_JOB,
     Agent,
     ResourcePolicy,
@@ -55,7 +56,18 @@ def test_cpu_and_gpu_executors_cover_the_same_job_kinds() -> None:
         else:
             assert "in.mov" in cpu_argv
         assert not {"cuda", "h264_nvenc"} & set(cpu_argv)
-        assert {"cuda", "h264_nvenc"} & set(gpu_argv)
+        if kind == JobKind.qa:  # ffmpeg analysis filters only: CPU work on any worker
+            assert cpu_argv == gpu_argv
+        else:
+            assert {"cuda", "h264_nvenc"} & set(gpu_argv)
+
+
+def test_qa_executor_runs_the_qa_job_script() -> None:
+    argv = CPU_EXECUTORS[JobKind.qa](PAYLOAD)
+    assert argv[:2] == [sys.executable, str(QA_JOB)] and QA_JOB.name == "qa.py"
+    assert QA_JOB.is_file()
+    assert argv[argv.index("--input") + 1] == "in.mov"
+    assert argv[argv.index("--output") + 1] == PAYLOAD["output"]
 
 
 def test_render_spec_file_holds_the_whole_payload() -> None:

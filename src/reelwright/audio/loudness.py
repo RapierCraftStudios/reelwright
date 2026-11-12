@@ -136,7 +136,9 @@ def analysis_argv(inputs: list[str], pre: str | None = None) -> list[str]:
     ]  # fmt: skip
 
 
-def analyse(inputs: list[str], pre: str | None = None, capture: Capture = capture_stderr) -> dict[str, str]:
+def analyse(
+    inputs: list[str], pre: str | None = None, capture: Capture = capture_stderr
+) -> dict[str, str]:
     rc, err = capture(analysis_argv(inputs, pre))
     if rc != 0:
         raise LoudnessError(f"ffmpeg exited {rc} in the loudness analysis pass")
@@ -146,7 +148,7 @@ def analyse(inputs: list[str], pre: str | None = None, capture: Capture = captur
 def master(
     source: str, output: str, pre: str | None = None, capture: Capture = capture_stderr
 ) -> Loudness:
-    """Clean (``pre``) and normalise ``source`` into ``output`` (video copied, AAC); its loudness."""
+    """Clean (``pre``) and normalise ``source`` into ``output``; the measured result."""
     measured = analyse(["-i", source], pre, capture)
     argv = [
         "ffmpeg", "-hide_banner", "-nostdin", "-y", "-i", source,

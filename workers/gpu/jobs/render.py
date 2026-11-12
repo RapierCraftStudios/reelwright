@@ -95,9 +95,7 @@ def _master_filter(listing: Path, measure: Capture) -> str:
     return normalize_filter(parse_loudnorm_json(err), voice_chain())
 
 
-def concat_segments(
-    spec: Mapping[str, Any], run: Run = _run, measure: Capture = _measure
-) -> Path:
+def concat_segments(spec: Mapping[str, Any], run: Run = _run, measure: Capture = _measure) -> Path:
     segments = [str(s) for s in spec["segments"]]
     out = Path(str(spec["output"]))
     part = _part(str(out))
@@ -115,9 +113,7 @@ def concat_segments(
     return out
 
 
-def main(
-    argv: Sequence[str] | None = None, run: Run = _run, measure: Capture = _measure
-) -> int:
+def main(argv: Sequence[str] | None = None, run: Run = _run, measure: Capture = _measure) -> int:
     parser = argparse.ArgumentParser(prog="render", description=__doc__.splitlines()[0])
     parser.add_argument("--spec", required=True)
     parser.add_argument("--hwaccel", default="", help="accepted for symmetry; implied by encoder")

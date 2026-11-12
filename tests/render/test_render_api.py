@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -112,8 +113,79 @@ def test_full_flow_reports_output_and_preview(client: TestClient, proxies: Path)
     assert final["output_path"] == OUT
     assert Path(final["preview_path"]).read_bytes() == b"720p-preview"
     assert Path(final["preview_path"]).parent == proxies.resolve()
+    assert (final["qa_status"], final["qa"]) == ("pending", None)
     listed = client.get(f"/api/projects/{pid}/renders").json()
     assert [r["id"] for r in listed] == [rid]
+
+    qa_job = claim(client, "gpu-a")  # QA after the render is done still lands
+    assert qa_job["kind"] == "qa" and qa_job["payload"]["input"] == OUT
+    assert qa_job["payload"]["upload"] == f"/api/projects/{pid}/renders/{rid}/qa"
+    put_qa = client.put(
+        qa_job["payload"]["upload"],
+        content=json.dumps(PASSING).encode(),
+        headers={"Content-Type": "application/json"},
+    )
+    assert put_qa.status_code == 200, put_qa.text
+    finish(client, qa_job, "gpu-a")
+    after = client.get(f"/api/projects/{pid}/renders/{rid}").json()
+    assert (after["status"], after["qa_status"]) == ("done", "passed")
+    assert after["qa"]["passed"] is True
+    report = client.get(f"/api/projects/{pid}/renders/{rid}/qa")
+    assert report.status_code == 200 and report.json()["loudness"] == PASSING["loudness"]
+
+
+PASSING: dict[str, Any] = {
+    "passed": True,
+    "black": [],
+    "frozen": [],
+    "silence": [],
+    "loudness": {"integrated": -14.2, "true_peak": -1.6},
+    "issues": [],
+}
+FAILING: dict[str, Any] = {
+    **PASSING,
+    "passed": False,
+    "black": [{"start": 2.0, "end": 4.0, "duration": 2.0}],
+    "issues": ["black video 2.00-4.00 s (2.00 s)"],
+}
+
+
+def new_render(client: TestClient) -> tuple[int, int]:
+    pid = project(client)
+    rid = client.post(
+        f"/api/projects/{pid}/renders", json={"otio": OTIO, "output_path": OUT}
+    ).json()["id"]
+    return pid, int(rid)
+
+
+def test_failing_qa_report_marks_the_render_failed_qa(client: TestClient) -> None:
+    pid, rid = new_render(client)
+    resp = client.put(f"/api/projects/{pid}/renders/{rid}/qa", json=FAILING)
+    assert resp.status_code == 200, resp.text
+    got = resp.json()
+    assert got["qa_status"] == "failed" and got["status"] == "queued"  # lifecycle untouched
+    assert got["qa"]["black"] == FAILING["black"]
+    assert client.get(f"/api/projects/{pid}/renders/{rid}/qa").json()["passed"] is False
+
+
+def test_qa_report_before_upload_is_404(client: TestClient) -> None:
+    pid, rid = new_render(client)
+    resp = client.get(f"/api/projects/{pid}/renders/{rid}/qa")
+    assert resp.status_code == 404 and resp.json()["detail"] == "qa report not ready"
+    assert client.get(f"/api/projects/{pid}/renders/99/qa").status_code == 404
+
+
+def test_qa_upload_needs_the_worker_token(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pid, rid = new_render(client)
+    monkeypatch.setenv("REELWRIGHT_WORKER_TOKEN", "t0ken-for-test")
+    url = f"/api/projects/{pid}/renders/{rid}/qa"
+    assert client.put(url, json=PASSING).status_code == 401
+    assert client.put(f"/api/projects/{pid}/renders/{rid}/preview", content=b"x").status_code == 401
+    good = {"Authorization": "Bearer t0ken-for-test"}
+    assert client.put(url, json=PASSING, headers=good).status_code == 200
+    assert client.get(f"/api/projects/{pid}/renders/{rid}").json()["qa_status"] == "passed"
 
 
 def test_failed_segment_is_reported(client: TestClient) -> None:

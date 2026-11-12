@@ -16,7 +16,7 @@ class MicProfile:
     """Filter settings for one microphone."""
 
     highpass_hz: int = 80  # rumble, desk thumps, HVAC
-    denoise_nf_db: float = -50.0  # afftdn noise floor; higher values eat quiet speech
+    denoise_nf_db: float = -25.0  # afftdn noise floor (-80..-20 dB); higher values eat quiet speech
     mud_hz: int = 250
     mud_gain_db: float = -3.0
     presence_hz: int = 4000

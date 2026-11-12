@@ -182,6 +182,19 @@ def test_concat_copies_video_and_encodes_aac_once() -> None:
         concat_command([], "o.mp4", "l.txt")
 
 
+def test_concat_audio_filter_runs_before_the_aac_encode() -> None:
+    plain = concat_command(["/x/a.seg0.mov"], "/x/a.mp4.part", "/t/list.txt")
+    assert "-af" not in plain
+    assert (
+        concat_command(["/x/a.seg0.mov"], "/x/a.mp4.part", "/t/list.txt", audio_filter=None)
+        == plain
+    )
+    argv = concat_command(["/x/a.seg0.mov"], "/x/a.mp4.part", "/t/list.txt", audio_filter="x")
+    i = argv.index("-af")
+    assert argv[i + 1] == "x" and argv[i + 2] == "-c:a"
+    assert argv[:i] + argv[i + 2 :] == plain  # nothing else moves
+
+
 def _have_ffmpeg() -> bool:
     return shutil.which("ffmpeg") is not None and shutil.which("ffprobe") is not None
 
