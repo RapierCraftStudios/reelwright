@@ -1,0 +1,19 @@
+{
+  "description": "The reader goes back and reads line 2 again from the top: the position jumps back, then carries on.",
+  "lines": [
+    "Three weeks ago I deleted every editing app on my laptop.",
+    "Not because I quit making videos, but because I built something to edit them for me.",
+    "It reads my script, watches the footage, and picks the best take of every line.",
+    "Today I'm going to show you exactly how it works and where it still breaks."
+  ],
+  "start": 0,
+  "steps": [
+    {"say": "three weeks ago i deleted every editing app on my laptop", "line": 0},
+    {"say": "not because i quit making videos but because i built something to edit them for me", "line": 1},
+    {"say": "it reads my script watches the footage and picks the best take of every line", "line": 2},
+    {"say": "today i'm going to show you", "line": 3},
+    {"say": "it reads my script watches the footage", "line": 2},
+    {"say": "and picks the best take of every line", "line": 2},
+    {"say": "today i'm going to", "line": 3}
+  ]
+}
