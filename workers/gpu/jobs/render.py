@@ -8,8 +8,9 @@ for the same reason.
 
     python workers/gpu/jobs/render.py --spec rw-render-7.json --encoder h264_nvenc
 
-Segment spec: {"mode": "segment", "otio", "start_frame", "end_frame", "output"} gives a .mkv with
-H.264 video and PCM audio. Concat spec: {"mode": "concat", "segments": [...], "output"} gives an
+Segment spec: {"mode": "segment", "otio", "start_frame", "end_frame", "output"} gives a .mov with
+H.264 video and PCM audio (QuickTime keeps the exact 1/fps timescale; Matroska rounds timestamps to
+milliseconds, which jitters the frame spacing across a seam at 30000/1001). Concat spec: {"mode": "concat", "segments": [...], "output"} gives an
 .mp4 with the video stream-copied and AAC audio, and deletes the segments once it is written.
 Every output is written to ``<output>.part`` first and then moved into place.
 """
@@ -66,7 +67,7 @@ def render_segment(spec: Mapping[str, Any], encoder: str, run: Run = _run) -> Pa
             filter_script_path=str(script),
         )
         script.write_text(cmd.filter_script, encoding="utf-8")
-        argv = [*cmd.argv[:-1], "-f", "matroska", cmd.argv[-1]]
+        argv = [*cmd.argv[:-1], "-f", "mov", cmd.argv[-1]]
         rc = run(argv)
     if rc != 0:
         part.unlink(missing_ok=True)
@@ -95,10 +96,16 @@ def concat_segments(spec: Mapping[str, Any], run: Run = _run) -> Path:
 def main(argv: Sequence[str] | None = None, run: Run = _run) -> int:
     parser = argparse.ArgumentParser(prog="render", description=__doc__.splitlines()[0])
     parser.add_argument("--spec", required=True)
+    parser.add_argument("--hwaccel", default="", help="accepted for symmetry; implied by encoder")
     parser.add_argument("--encoder", default=GPU_ENCODER, choices=(GPU_ENCODER, CPU_ENCODER))
     args = parser.parse_args(argv)
     try:
-        spec = json.loads(Path(args.spec).read_text(encoding="utf-8"))
+        spec_path = Path(args.spec)
+        spec = json.loads(spec_path.read_text(encoding="utf-8"))
+        if spec_path.name.startswith("rw-render-") and spec_path.parent.resolve() == Path(
+            tempfile.gettempdir()
+        ).resolve():
+            spec_path.unlink(missing_ok=True)  # written by the worker agent for this run only
         if spec.get("mode") == "concat":
             out = concat_segments(spec, run)
         else:

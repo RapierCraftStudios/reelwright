@@ -4,8 +4,9 @@
 ``build_render`` turns an Edit, or a ``[start_frame, end_frame)`` range of it, into an ffmpeg argv
 and a filter script. Every video piece is converted to the timeline rate and then trimmed and padded
 to its exact frame count. Every audio piece is resampled to 48 kHz and then trimmed and padded to
-an exact sample count. The output is capped at ``-frames:v``, so the render has the timeline's
-length to the frame. Sample positions are derived from timeline frames
+an exact sample count, so the render has the timeline's length to the frame. There is no
+``-frames:v`` cap: ffmpeg closes the output when it reaches that cap, which drops audio still
+buffered behind the last video frame (up to ~10 ms at a segment end). Sample positions are derived from timeline frames
 (``round(frame * 48000 / fps)``), so segments rendered separately add up exactly.
 
 Each piece has its own input with an accurate ``-ss`` seek. The decoder starts near the piece and
@@ -173,7 +174,7 @@ def build_render(
     samples = sample_at(end_frame, fps) - sample_at(start_frame, fps)
     encoder = GPU_ENCODER if hw else CPU_ENCODER
     argv += ["-/filter_complex", filter_script_path, "-map", "[vout]", "-map", "[aout]"]
-    argv += ["-r", rate, "-fps_mode", "cfr", "-frames:v", str(frames)]
+    argv += ["-r", rate, "-fps_mode", "cfr"]
     argv += ["-c:v", encoder, *ENCODER_ARGS[encoder], "-pix_fmt", "yuv420p"]
     argv += ["-c:a", audio_codec, "-ar", str(SAMPLE_RATE), "-ac", "2", output]
     return RenderCommand(argv, ";\n".join(lines) + "\n", frames, samples)

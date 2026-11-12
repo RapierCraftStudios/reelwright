@@ -114,7 +114,7 @@ def plan_segments(edit: Edit, n: int, min_segment_frames: int) -> list[tuple[int
 def segment_path(output_path: str, index: int) -> str:
     """Segment files sit next to the final output on the capture PC."""
     stem = output_path[: -len(".mp4")] if output_path.lower().endswith(".mp4") else output_path
-    return f"{stem}.seg{index}.mkv"
+    return f"{stem}.seg{index}.mov"
 
 
 def free_gpus(session: Session, now: datetime) -> int:
