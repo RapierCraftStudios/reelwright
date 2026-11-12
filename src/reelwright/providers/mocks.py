@@ -63,7 +63,14 @@ class LocalCpuWorker:
     """A CPU-only render worker on the local machine."""
 
     name: str = "local-cpu"
-    capabilities: tuple[str, ...] = ("ffmpeg",)
+    capabilities: tuple[str, ...] = ("cpu", "ffmpeg")
+
+    @property
+    def kinds(self) -> tuple[str, ...]:
+        """Every render job kind: the CPU fallback runs the same kinds as a GPU worker, slower."""
+        from reelwright.render.queue import JobKind
+
+        return tuple(JobKind)
 
 
 @dataclass
