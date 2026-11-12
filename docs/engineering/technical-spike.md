@@ -21,8 +21,9 @@ it, but the primary goal is to grow this one channel to a primary income in abou
   the same, and the shared code is Python.
 - **Auth**: no login. The service binds only to the Tailscale interface. It is single-tenant and single-user.
 - **Data and tenancy**: single tenant. SQLite for metadata. Media stays on the capture PC.
-- **Integrations**: a mock provider for every credentialed service (YouTube, X, Meta, TikTok, music library), so dev
-  and CI stay green.
+- **Integrations**: a mock provider for every credentialed service (YouTube, AlterLab, music library), so dev and CI
+  stay green. X, Instagram, Facebook and TikTok are driven through **AlterLab Hands** (the creator's own logged-in
+  sessions), not paid platform APIs.
 - **Payments**: none in the product. Income comes from YouTube Partner Program (YPP), affiliate links, sponsorships and the AlterLab funnel.
 - **i18n**: English only. Captions can be translated later.
 - **Compliance**: platform terms (YouTube API, Meta, X, TikTok), music licensing, sponsorship disclosure rules. Minimal PII
@@ -31,7 +32,8 @@ it, but the primary goal is to grow this one channel to a primary income in abou
   functional.
 - **Deployment**: systemd user services on the Arch dev server, plus GPU workers on MrDubey and Legion.
 - **Scale**: one channel, about 1 long video and 5 Shorts a week, roughly 50 to 200 GB of footage a month.
-- **Budget**: free or hobby tiers. Paid only where a platform forces it: X API, a music library subscription.
+- **Budget**: free or hobby tiers. No paid platform APIs: social posting goes through AlterLab Hands. The only paid
+  item is a music library subscription.
 - **Team**: Yash plus ForgeDock agents.
 - **Timeline**: video #1 by about 2026-11-26. YPP-eligible and earning by about 2027-02-12.
 
@@ -89,6 +91,13 @@ This section drives the product priorities. It is not code.
   Recordly's own extension API.
 - **LLM**: SpectraCut's `providers` layer (Claude Code provider on existing subscriptions, mock for CI).
 - **Facts and research**: AlterLab API (scrape and extract) and the YouTube Data API.
+- **Social publishing and engagement**: AlterLab Hands browser tasks on the creator's connected sessions
+  (`alterlab_task_start`, `alterlab_task_act` with `upload`, `type` and `click`, `alterlab_task_answer` for approvals)
+  for X, Instagram, Facebook and TikTok. No paid platform APIs.
+
+**Rationale (publishing)**: the X API's paid tier and Meta/TikTok app reviews cost money and weeks. Hands acts as the
+creator in their own logged-in browser session, with write actions gated by approval. Rejected: official APIs for
+these four platforms.
 
 **Rationale**:
 - **Python core**: the speech, OTIO and SpectraCut pieces are Python, so the pipeline is too.
@@ -265,17 +274,16 @@ justify it.
 | Credential or account | Env var(s) | needs-human issue | Mock in dev/CI |
 |-----------------------|------------|-------------------|----------------|
 | Google Cloud OAuth client (YouTube Data + Analytics API) | `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET` | YouTube API OAuth client | `MockYouTube` (records uploads, canned analytics) |
-| X API (paid tier, media upload) | `X_API_KEY`, `X_API_SECRET`, `X_ACCESS_TOKEN`, `X_ACCESS_SECRET` | X developer app | `MockX` |
-| Meta app + Instagram professional account + Facebook Page | `META_APP_ID`, `META_APP_SECRET`, `META_PAGE_TOKEN` | Meta app for Instagram/Facebook | `MockMeta` |
-| TikTok Content Posting API (audited app) | `TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET` | TikTok developer app | `MockTikTok` |
+| AlterLab Hands sessions for X, Instagram, Facebook and TikTok (creator signs in once per site via `alterlab_connect`; Reelwright never sees cookies or passwords) | `ALTERLAB_API_KEY` (scopes `hands:read`, `hands:write`) | Connect social accounts to AlterLab Hands | `MockHands` (records task actions) |
 | Music/SFX library subscription with API or bulk export | `MUSIC_LIBRARY_API_KEY` | Licensed music library | `MockMusic` (bundled CC0 test tracks) |
-| AlterLab API key | `ALTERLAB_API_KEY` | AlterLab key for Reelwright | `MockAlterLab` (fixture pages) |
+| AlterLab API key (scrape, `hands:read`, `hands:write`) | `ALTERLAB_API_KEY` | AlterLab key for Reelwright | `MockAlterLab` (fixture pages) |
 | GPU worker enrolment on MrDubey and Legion (Windows admin steps) | `REELWRIGHT_WORKER_TOKEN` | Install GPU workers | `LocalCpuWorker` (CPU ffmpeg) |
 | Teleprompter hardware (beam splitter + phone mount) | — | Teleprompter hardware | phone-above-lens mode |
 
 **Rationale**: every platform account, paid tier and admin install needs a human, and some need days for app review
-(Meta, TikTok). So each is a needs-human issue gating only real publishing, while the mock keeps the build moving. Order
-of urgency: YouTube first (video #1), then Meta and TikTok, since their reviews take longest. Start those now.
+(Meta, TikTok). So each is a needs-human issue gating only real publishing, while the mock keeps the build moving. YouTube
+uses its free official API (uploads, analytics). Every other platform runs through AlterLab Hands, which avoids paid
+API tiers and app reviews. Hands' own approval step for write actions sits on top of Reelwright's approval queue.
 
 ## Milestone plan
 

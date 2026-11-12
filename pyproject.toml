@@ -1,0 +1,17 @@
+[project]
+name = "reelwright"
+version = "0.0.0"
+description = "AI-run creator studio: script, teleprompter, auto-edit, motion style, Shorts, publishing and analytics."
+readme = "README.md"
+license = "AGPL-3.0-or-later"
+requires-python = ">=3.12"
+dependencies = [
+    "alterlab>=2.4.5",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/reelwright"]
