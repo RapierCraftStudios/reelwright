@@ -118,7 +118,9 @@ def _p95(samples: list[float]) -> float:
     return ordered[max(0, -(-95 * len(ordered) // 100) - 1)]
 
 
-def test_round_trips_are_under_300ms_p95_and_no_audio_hits_disk(client: TestClient, tmp_path: Path) -> None:
+def test_round_trips_are_under_300ms_p95_and_no_audio_hits_disk(
+    client: TestClient, tmp_path: Path
+) -> None:
     words = " ".join(f"word{i}" for i in range(60))
     source = f"---\nformat: long\nworking_title: T\n---\n## beat: hook | intent: grab\n{words}.\n"
     pid = _project(client, source)

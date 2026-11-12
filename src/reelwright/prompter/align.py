@@ -121,7 +121,11 @@ class ScriptAligner:
     def _step(self, word: str) -> Position | None:
         self._recent.append(word)
         recent = list(self._recent)
-        if self._in_sync and self.cursor < len(self.words) and similar(word, self.words[self.cursor]):
+        if (
+            self._in_sync
+            and self.cursor < len(self.words)
+            and similar(word, self.words[self.cursor])
+        ):
             return self._move(self.cursor, 1.0)
         forward = self._best(recent, range(self.cursor, len(self.words)), FORWARD_RUN, FORWARD_MIN)
         if forward is not None and forward[0] < self.cursor + FORWARD_TOKENS:

@@ -278,3 +278,81 @@ test("smooth scroll moves a little every frame, with no CSS animation on the tex
   expect(result.ys[0]).toBeGreaterThan(result.ys[result.ys.length - 1]);
   expect(result.animations).toBe(0);
 });
+
+// Voice follow (#7): the real WS route and aligner, with Chromium's fake mic and the server's mock
+// speech engine (REELWRIGHT_PROMPTER_ASR=mock in playwright.config.ts), which "reads" the script on.
+// Launch options can only be set per file; the fake mic flags change nothing for the manual tests.
+test.use({ launchOptions: { args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"] } });
+
+test.describe("voice follow", () => {
+  test.use({ permissions: ["microphone"] });
+
+  /** Record every line that becomes active from now on, so a jump back to the top can't slip by. */
+  async function watchActive(page: Page) {
+    await text(page).evaluate((el) => {
+      const w = window as unknown as { __seen: number[]; __observer?: MutationObserver };
+      w.__observer?.disconnect();
+      w.__seen = [];
+      w.__observer = new MutationObserver(() => {
+        const line = el.querySelector('[data-active="true"]')?.getAttribute("data-line");
+        if (line) w.__seen.push(Number(line));
+      });
+      w.__observer.observe(el, { subtree: true, attributes: true, attributeFilter: ["data-active"] });
+    });
+  }
+
+  const seen = (page: Page) => page.evaluate(() => (window as unknown as { __seen: number[] }).__seen);
+
+  test("switches between voice follow and manual without losing the line", async ({ page }) => {
+    const id = await lockedProject(page, "Voice");
+    await openPrompter(page, id);
+    const voice = page.getByRole("button", { name: "Voice follow" });
+
+    // Manually to line N.
+    await page.keyboard.press("Space");
+    await expect.poll(async () => Number(await activeLine(page)), { timeout: 10_000 }).toBeGreaterThanOrEqual(11);
+    await page.keyboard.press("Space");
+    const manual = Number(await activeLine(page));
+
+    // Voice on: follows on from N, never from the top.
+    await watchActive(page);
+    await voice.click();
+    await expect(voice).toHaveAttribute("aria-pressed", "true");
+    await expect.poll(async () => Number(await activeLine(page)), { timeout: 10_000 }).toBeGreaterThan(manual);
+    expect(Math.min(...(await seen(page)))).toBeGreaterThanOrEqual(manual);
+
+    // Voice off: the line and the scroll offset stay put.
+    await voice.click();
+    await expect(voice).toHaveAttribute("aria-pressed", "false");
+    const offLine = Number(await activeLine(page));
+    const offY = await translateY(page);
+    await page.waitForTimeout(800);
+    expect(Number(await activeLine(page))).toBe(offLine);
+    expect(await translateY(page)).toBe(offY);
+
+    // Start scrolls on from that line.
+    await watchActive(page);
+    await page.keyboard.press("Space");
+    await expect.poll(async () => Number(await activeLine(page)), { timeout: 10_000 }).toBeGreaterThan(offLine);
+    await page.keyboard.press("Space");
+    expect(Math.min(...(await seen(page)))).toBeGreaterThan(offLine);
+    const resumed = Number(await activeLine(page));
+
+    // Voice on again: resumes from the current line.
+    await watchActive(page);
+    await voice.click();
+    await expect.poll(async () => Number(await activeLine(page)), { timeout: 10_000 }).toBeGreaterThan(resumed);
+    expect(Math.min(...(await seen(page)))).toBeGreaterThanOrEqual(resumed);
+    await voice.click();
+  });
+
+  test("settings show the voice round trip p95", async ({ page }) => {
+    const id = await lockedProject(page, "Voice latency");
+    await openPrompter(page, id);
+    await page.getByRole("button", { name: "Voice follow" }).click();
+    await page.getByRole("button", { name: "Settings" }).click();
+    await expect(page.getByTestId("prompter-latency")).toHaveText(/^\d+ ms$/, { timeout: 10_000 });
+    const ms = Number((await page.getByTestId("prompter-latency").textContent())?.replace(" ms", ""));
+    expect(ms).toBeLessThan(300);
+  });
+});

@@ -86,15 +86,24 @@ def test_buffer_without_agreement_is_capped() -> None:
 
 
 def test_make_asr_picks_the_engine_from_the_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    mock = make_asr(WORDS, {"REELWRIGHT_PROMPTER_ASR": "mock", "REELWRIGHT_PROMPTER_MOCK_MS_PER_WORD": "50"})
+    mock = make_asr(
+        WORDS, {"REELWRIGHT_PROMPTER_ASR": "mock", "REELWRIGHT_PROMPTER_MOCK_MS_PER_WORD": "50"}
+    )
     assert isinstance(mock, ReadAlongMockAsr)
     assert mock.feed(_ms(100)) == ["three", "weeks"]
     with pytest.raises(AsrUnavailable):
         make_asr(WORDS, {"REELWRIGHT_PROMPTER_ASR": "cloud"})
     loaded: list[str] = []
-    monkeypatch.setattr(asr, "faster_whisper_transcriber", lambda name: loaded.append(name) or (lambda pcm: []))
+
+    def fake_transcriber(name: str) -> asr.Transcriber:
+        loaded.append(name)
+        return lambda pcm: []
+
+    monkeypatch.setattr(asr, "faster_whisper_transcriber", fake_transcriber)
     assert isinstance(make_asr(WORDS, {}), FasterWhisperStreamingAsr)
-    assert isinstance(make_asr(WORDS, {"REELWRIGHT_PROMPTER_ASR_MODEL": "base.en"}), FasterWhisperStreamingAsr)
+    assert isinstance(
+        make_asr(WORDS, {"REELWRIGHT_PROMPTER_ASR_MODEL": "base.en"}), FasterWhisperStreamingAsr
+    )
     assert loaded == ["tiny.en", "base.en"]
 
 

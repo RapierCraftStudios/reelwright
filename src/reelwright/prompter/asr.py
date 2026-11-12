@@ -45,7 +45,7 @@ class StreamingAsr(Protocol):
         ...
 
     def reset(self, word_index: int = 0) -> None:
-        """Drop buffered audio. `word_index` is where the reader is; a real recogniser ignores it."""
+        """Drop buffered audio. `word_index` is where the reader is; real ASR ignores it."""
         ...
 
 
@@ -78,9 +78,8 @@ class FasterWhisperStreamingAsr:
         self._since = 0
         hyp = self._transcribe(bytes(self._buffer))
         agreed = 0
-        while (
-            agreed < min(len(hyp), len(self._prev))
-            and normalize(hyp[agreed][0]) == normalize(self._prev[agreed][0])
+        while agreed < min(len(hyp), len(self._prev)) and normalize(hyp[agreed][0]) == normalize(
+            self._prev[agreed][0]
         ):
             agreed += 1
         new = [word for word, _ in hyp[self._committed : agreed]]

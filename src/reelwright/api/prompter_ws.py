@@ -19,8 +19,8 @@ import time
 from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from starlette.concurrency import run_in_threadpool
 from sqlmodel import Session, select
+from starlette.concurrency import run_in_threadpool
 
 from reelwright.db.models import Project, ScriptVersion
 from reelwright.db.session import get_engine
