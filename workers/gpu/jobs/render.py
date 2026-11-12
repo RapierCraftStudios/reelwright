@@ -12,7 +12,9 @@ Segment spec: {"mode": "segment", "otio", "start_frame", "end_frame", "output"} 
 H.264 video and PCM audio. QuickTime keeps the exact 1/fps timescale; Matroska rounds timestamps
 to milliseconds, which jitters the frame spacing across a seam at 30000/1001. Concat spec:
 {"mode": "concat", "segments": [...], "output"} gives an .mp4 with the video stream-copied and AAC
-audio, and deletes the segments once it is written.
+audio, and deletes the segments once it is written. With ``"master": true`` the joined audio is
+mastered on the way: a loudness analysis pass first, then voice cleanup and a linear gain to
+-14 LUFS / -1 dBTP in the concat itself (reelwright.audio).
 Every output is written to ``<output>.part`` first and then moved into place.
 """
 
@@ -28,6 +30,8 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from reelwright.audio.cleanup import voice_chain
+from reelwright.audio.loudness import Capture, analysis_argv, normalize_filter, parse_loudnorm_json
 from reelwright.render.graph import (
     CPU_ENCODER,
     GPU_ENCODER,
@@ -46,6 +50,11 @@ class RenderFailed(RuntimeError):
 
 def _run(argv: list[str]) -> int:
     return subprocess.run(argv, check=False).returncode
+
+
+def _measure(argv: list[str]) -> tuple[int, str]:
+    done = subprocess.run(argv, capture_output=True, text=True, errors="replace", check=False)
+    return done.returncode, done.stderr
 
 
 def _part(output: str) -> Path:
@@ -77,14 +86,26 @@ def render_segment(spec: Mapping[str, Any], encoder: str, run: Run = _run) -> Pa
     return out
 
 
-def concat_segments(spec: Mapping[str, Any], run: Run = _run) -> Path:
+def _master_filter(listing: Path, measure: Capture) -> str:
+    """Cleanup plus the second loudnorm pass, from an analysis pass over the joined audio."""
+    inputs = ["-f", "concat", "-safe", "0", "-i", str(listing)]
+    rc, err = measure(analysis_argv(inputs, voice_chain()))
+    if rc != 0:
+        raise RenderFailed(f"ffmpeg exited {rc} in the loudness analysis pass")
+    return normalize_filter(parse_loudnorm_json(err), voice_chain())
+
+
+def concat_segments(
+    spec: Mapping[str, Any], run: Run = _run, measure: Capture = _measure
+) -> Path:
     segments = [str(s) for s in spec["segments"]]
     out = Path(str(spec["output"]))
     part = _part(str(out))
     with tempfile.TemporaryDirectory(prefix="rw-concat-") as tmp:
         listing = Path(tmp) / "segments.txt"
         listing.write_text(concat_list([os.path.abspath(s) for s in segments]), encoding="utf-8")
-        rc = run(concat_command(segments, str(part), str(listing)))
+        audio_filter = _master_filter(listing, measure) if spec.get("master") else None
+        rc = run(concat_command(segments, str(part), str(listing), audio_filter=audio_filter))
     if rc != 0:
         part.unlink(missing_ok=True)
         raise RenderFailed(f"ffmpeg exited {rc} concatenating {len(segments)} segments")
@@ -94,7 +115,9 @@ def concat_segments(spec: Mapping[str, Any], run: Run = _run) -> Path:
     return out
 
 
-def main(argv: Sequence[str] | None = None, run: Run = _run) -> int:
+def main(
+    argv: Sequence[str] | None = None, run: Run = _run, measure: Capture = _measure
+) -> int:
     parser = argparse.ArgumentParser(prog="render", description=__doc__.splitlines()[0])
     parser.add_argument("--spec", required=True)
     parser.add_argument("--hwaccel", default="", help="accepted for symmetry; implied by encoder")
@@ -109,7 +132,7 @@ def main(argv: Sequence[str] | None = None, run: Run = _run) -> int:
         ):
             spec_path.unlink(missing_ok=True)  # written by the worker agent for this run only
         if spec.get("mode") == "concat":
-            out = concat_segments(spec, run)
+            out = concat_segments(spec, run, measure)
         else:
             out = render_segment(spec, args.encoder, run)
     except (RenderFailed, KeyError, ValueError, OSError) as e:

@@ -375,6 +375,32 @@ class Render(SQLModel, table=True):
     preview_path: str | None = Field(default=None, max_length=1024)
     error: str | None = Field(default=None, max_length=2000)
     created_at: datetime = Field(default_factory=_now)
+    # Pre-publish media QA (spike § Design system and quality gates): pending|passed|failed|error.
+    qa_job_id: int | None = None
+    qa_status: str | None = Field(default=None, max_length=16)
+    qa_report: str | None = Field(default=None, sa_type=Text)
+
+
+class QAInterval(SQLModel):
+    start: float = Field(ge=0)
+    end: float = Field(ge=0)
+    duration: float = Field(ge=0)
+
+
+class QALoudness(SQLModel):
+    integrated: float  # LUFS
+    true_peak: float  # dBTP
+
+
+class QAReport(SQLModel):
+    """Media QA of a final render: black, frozen and silent spans, loudness, and the verdict."""
+
+    passed: bool
+    black: list[QAInterval] = Field(default_factory=list, max_length=10_000)
+    frozen: list[QAInterval] = Field(default_factory=list, max_length=10_000)
+    silence: list[QAInterval] = Field(default_factory=list, max_length=10_000)
+    loudness: QALoudness | None = None
+    issues: list[str] = Field(default_factory=list, max_length=10_000)
 
 
 class RenderCreate(SQLModel):
@@ -402,3 +428,5 @@ class RenderRead(SQLModel):
     preview_path: str | None
     error: str | None
     created_at: datetime
+    qa_status: str | None = None
+    qa: QAReport | None = None

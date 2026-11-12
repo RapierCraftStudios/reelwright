@@ -181,10 +181,17 @@ def build_render(
     return RenderCommand(argv, ";\n".join(lines) + "\n", frames, samples)
 
 
-def concat_command(segments: Sequence[str], output: str, list_path: str) -> list[str]:
-    """Join segment files: video stream-copied (each segment opens on a keyframe), AAC once."""
+def concat_command(
+    segments: Sequence[str], output: str, list_path: str, *, audio_filter: str | None = None
+) -> list[str]:
+    """Join segment files: video stream-copied (each segment opens on a keyframe), AAC once.
+
+    ``audio_filter`` (voice cleanup plus loudness normalisation) runs over the joined audio, so
+    mastering sees one continuous programme rather than each segment on its own.
+    """
     if not segments:
         raise ValueError("no segments to concatenate")
+    master = ["-af", audio_filter] if audio_filter else []
     return [
         "ffmpeg",
         "-hide_banner",
@@ -202,6 +209,7 @@ def concat_command(segments: Sequence[str], output: str, list_path: str) -> list
         "0:a:0",
         "-c:v",
         "copy",
+        *master,
         "-c:a",
         "aac",
         "-b:a",
