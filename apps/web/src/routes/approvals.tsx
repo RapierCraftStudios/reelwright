@@ -411,13 +411,19 @@ export function ApprovalsRoute() {
             </p>
             <label>
               Approved by
-              <input value={approver} onChange={(e) => setApprover(e.target.value)} required maxLength={64} />
+              <input
+                value={approver}
+                onChange={(e) => setApprover(e.target.value)}
+                required
+                maxLength={64}
+                autoFocus={!approver.trim()}
+              />
             </label>
             <div className="confirm-actions">
               <button type="button" onClick={cancel}>
                 Cancel
               </button>
-              <button type="submit" autoFocus disabled={!approver.trim()}>
+              <button type="submit" autoFocus={!!approver.trim()} disabled={!approver.trim()}>
                 {pending.at ? "Confirm schedule" : "Confirm publish"}
               </button>
             </div>
