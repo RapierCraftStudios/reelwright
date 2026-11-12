@@ -16,7 +16,7 @@ from sqlmodel import Session
 
 from reelwright.db.models import JobComplete, RenderJobRead, WorkerHeartbeat, WorkerRead
 from reelwright.db.session import get_session
-from reelwright.render import queue, registry
+from reelwright.render import queue, registry, split
 
 TOKEN_ENV = "REELWRIGHT_WORKER_TOKEN"
 
@@ -75,4 +75,6 @@ def complete_job(job_id: int, body: JobComplete, session: SessionDep) -> RenderJ
         raise HTTPException(status_code=404, detail="job not found") from None
     except queue.NotClaimant as e:
         raise HTTPException(status_code=409, detail=str(e)) from None
+    split.advance(session, job)  # moves a final render on; a no-op for other jobs
+    session.refresh(job)
     return queue.job_to_read(job)

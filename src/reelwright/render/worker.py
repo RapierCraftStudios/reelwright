@@ -9,9 +9,11 @@ cap, because MrDubey is the owner's work PC. The bearer token comes from REELWRI
 from __future__ import annotations
 
 import ipaddress
+import json
 import os
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from collections.abc import Callable, Iterator, Mapping
@@ -76,17 +78,38 @@ def _transcribe(device: str, compute_type: str) -> ArgvBuilder:
     return build
 
 
+RENDER_JOB = TRANSCRIBE_JOB.with_name("render.py")
+
+
+def _render(encoder: str) -> ArgvBuilder:
+    """Render segment or concat via the job script. The payload (with its OTIO) goes in a spec
+    file because a long rough cut does not fit on a Windows command line."""
+
+    def build(payload: Mapping[str, Any]) -> list[str]:
+        if "output" not in payload:
+            raise ValueError("job payload needs 'output'")
+        fd, spec = tempfile.mkstemp(prefix="rw-render-", suffix=".json")
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            json.dump(dict(payload), fh)
+        argv = [sys.executable, str(RENDER_JOB), "--spec", spec, "--encoder", encoder]
+        if encoder == "h264_nvenc":
+            argv += ["--hwaccel", "cuda"]
+        return argv
+
+    return build
+
+
 GPU_EXECUTORS: dict[JobKind, ArgvBuilder] = {
     JobKind.transcode: _ffmpeg(True, "h264_nvenc", "-preset", "p5"),
     JobKind.proxy: _ffmpeg(True, "h264_nvenc", "-vf", "scale=-2:720", "-preset", "p1"),
-    JobKind.render: _ffmpeg(True, "h264_nvenc", "-preset", "p7", "-rc", "vbr"),
+    JobKind.render: _render("h264_nvenc"),
     JobKind.transcribe: _transcribe("cuda", "float16"),
 }
 
 CPU_EXECUTORS: dict[JobKind, ArgvBuilder] = {
     JobKind.transcode: _ffmpeg(False, "libx264", "-preset", "medium"),
     JobKind.proxy: _ffmpeg(False, "libx264", "-vf", "scale=-2:720", "-preset", "veryfast"),
-    JobKind.render: _ffmpeg(False, "libx264", "-preset", "slow"),
+    JobKind.render: _render("libx264"),
     JobKind.transcribe: _transcribe("cpu", "int8"),
 }
 
