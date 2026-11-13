@@ -9,7 +9,7 @@ Create Date: 2026-11-12 15:08:08.543693
 from collections.abc import Sequence
 
 revision: str = "1378540ee7d3"
-down_revision: str | None = ("0009", "0010")
+down_revision: str | Sequence[str] | None = ("0009", "0010")
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
