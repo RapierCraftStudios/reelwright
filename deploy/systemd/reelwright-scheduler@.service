@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Reelwright scheduler (jobs, publish queue) for one environment (%i = prod | staging).
+[Unit]
+Description=Reelwright scheduler (%i)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/reelwright/%i
+EnvironmentFile=%h/reelwright/%i/deploy/env/%i.env
+EnvironmentFile=-%h/.config/reelwright/secrets.env
+Environment=REELWRIGHT_DB_URL=sqlite:///%h/.local/share/reelwright/%i/reelwright.sqlite
+ExecStart=%h/reelwright/%i/.venv/bin/rw scheduler
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

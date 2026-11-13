@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Polls origin every 2 minutes, so a push to staging or main is live within 5 minutes.
+[Unit]
+Description=Reelwright pull-based deploy timer
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=2min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

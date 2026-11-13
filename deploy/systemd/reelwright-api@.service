@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Reelwright API + dashboard for one environment (%i = prod | staging), bound only to the Tailscale IP.
+[Unit]
+Description=Reelwright API (%i)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/reelwright/%i
+EnvironmentFile=%h/reelwright/%i/deploy/env/%i.env
+EnvironmentFile=-%h/.config/reelwright/secrets.env
+Environment=REELWRIGHT_DB_URL=sqlite:///%h/.local/share/reelwright/%i/reelwright.sqlite
+# Bind the tailnet address only, so the instance is unreachable from outside the tailnet.
+# Exits (and is restarted) until tailscaled has an IPv4 address.
+ExecStart=/bin/sh -c 'ip=$$(tailscale ip -4 | head -n1); [ -n "$$ip" ] || { echo "no Tailscale IPv4" >&2; exit 1; }; exec %h/reelwright/%i/.venv/bin/rw serve --host "$$ip" --port "$$REELWRIGHT_PORT"'
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

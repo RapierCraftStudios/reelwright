@@ -1,0 +1,11 @@
+{
+  "TCP": {
+    "8490": { "HTTPS": true },
+    "8491": { "HTTPS": true }
+  },
+  "Web": {
+    "__TS_HOST__:8490": { "Handlers": { "/": { "Proxy": "http://__TAILSCALE_IP__:8480" } } },
+    "__TS_HOST__:8491": { "Handlers": { "/": { "Proxy": "http://__TAILSCALE_IP__:8481" } } }
+  },
+  "AllowFunnel": {}
+}

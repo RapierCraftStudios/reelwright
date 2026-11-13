@@ -25,5 +25,8 @@ when its credential is unset, so development and CI need no secrets.
 Checks: `uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run pytest -q`, then
 `pnpm -r typecheck && pnpm -r test`, then the smoke journey `pnpm exec playwright test`.
 
+Live prod (`main`) and staging (`staging`) run on the dev server over the tailnet: see
+[`docs/setup/deploy.md`](docs/setup/deploy.md).
+
 ## License
 AGPL-3.0-or-later. A [RapierCraft Studios](https://github.com/RapierCraftStudios) project.
