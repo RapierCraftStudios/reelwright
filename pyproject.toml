@@ -61,3 +61,5 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 norecursedirs = ["e2e"]
+# tests/captions and tests/edit (and others) share basenames without __init__.py: collect by path.
+addopts = ["--import-mode=importlib"]
