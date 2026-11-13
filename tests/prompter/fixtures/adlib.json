@@ -1,0 +1,15 @@
+{
+  "description": "A 10-word ad-lib in the middle of line 0: the position holds, then resumes on the script.",
+  "lines": [
+    "Three weeks ago I deleted every editing app on my laptop.",
+    "Not because I quit making videos, but because I built something to edit them for me.",
+    "It reads my script, watches the footage, and picks the best take of every line."
+  ],
+  "start": 0,
+  "steps": [
+    {"say": "three weeks ago i deleted every editing app", "line": 0},
+    {"say": "honestly that was terrifying my whole career lived in those", "line": 0, "held": true},
+    {"say": "on my laptop", "line": 0},
+    {"say": "not because i quit", "line": 1}
+  ]
+}

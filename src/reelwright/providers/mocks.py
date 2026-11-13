@@ -9,17 +9,28 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from spectracut.providers.base import Completion
+from spectracut.providers.mock_text import MockTextProvider
+
 
 @dataclass
 class MockYouTube:
-    """Records uploads; returns canned analytics."""
+    """Records uploads, thumbnails and caption tracks; returns canned analytics."""
 
     uploads: list[dict[str, Any]] = field(default_factory=list)
+    thumbnails: list[dict[str, Any]] = field(default_factory=list)
+    captions: list[dict[str, Any]] = field(default_factory=list)
 
     def upload(self, path: str, title: str, **meta: Any) -> str:
         video_id = f"mock-{len(self.uploads) + 1}"
         self.uploads.append({"id": video_id, "path": path, "title": title, **meta})
         return video_id
+
+    def set_thumbnail(self, video_id: str, path: str) -> None:
+        self.thumbnails.append({"id": video_id, "path": path})
+
+    def insert_caption(self, video_id: str, srt: str, language: str) -> None:
+        self.captions.append({"id": video_id, "srt": srt, "language": language})
 
     def analytics(self, video_id: str) -> dict[str, Any]:
         return {"video_id": video_id, "views": 0, "watch_time_s": 0, "ctr": 0.0, "retention": []}
@@ -63,15 +74,28 @@ class LocalCpuWorker:
     """A CPU-only render worker on the local machine."""
 
     name: str = "local-cpu"
-    capabilities: tuple[str, ...] = ("ffmpeg",)
+    capabilities: tuple[str, ...] = ("cpu", "ffmpeg")
+
+    @property
+    def kinds(self) -> tuple[str, ...]:
+        """Every render job kind: the CPU fallback runs the same kinds as a GPU worker, slower."""
+        from reelwright.render.queue import JobKind
+
+        return tuple(JobKind)
 
 
 @dataclass
 class MockLLM:
-    """Canned completions for CI."""
+    """Deterministic, schema-valid structured completions for CI (SpectraCut ``TextProvider``).
 
+    Delegates to SpectraCut's ``MockTextProvider``: no network, no CLI, and it honours the schema's
+    ``minItems``/``maxItems``, ``enum`` and ``minLength``.
+    """
+
+    name: str = "mock-llm"
     prompts: list[str] = field(default_factory=list)
 
-    def complete(self, prompt: str) -> str:
+    def complete(self, system: str, prompt: str, *, schema: dict[str, Any]) -> Completion:
         self.prompts.append(prompt)
-        return f"[mock completion for {len(prompt)} chars]"
+        result: Completion = MockTextProvider().complete(system, prompt, schema=schema)
+        return result

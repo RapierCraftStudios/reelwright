@@ -61,3 +61,19 @@ def test_credentials_without_real_adapter_raise(service: Service) -> None:
 
 def test_accepts_service_name_string(no_credentials: None) -> None:
     assert isinstance(get_provider("youtube"), mocks.MockYouTube)
+
+
+def test_llm_mock_is_a_spectracut_text_provider(no_credentials: None) -> None:
+    from spectracut.providers.base import Completion, TextProvider
+
+    provider = get_provider(Service.llm)
+    assert isinstance(provider, TextProvider)
+    schema = {
+        "type": "object",
+        "properties": {"items": {"type": "array", "items": {"type": "string"}, "minItems": 2}},
+        "required": ["items"],
+    }
+    completion = provider.complete("system", "prompt", schema=schema)
+    assert isinstance(completion, Completion)
+    assert isinstance(completion.output, dict) and len(completion.output["items"]) == 2
+    assert provider.prompts == ["prompt"]

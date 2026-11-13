@@ -1,0 +1,17 @@
+{
+  "description": "Two identical lines: after an ad-lib, the one at or after the cursor wins over the earlier copy.",
+  "lines": [
+    "This is the part everyone skips.",
+    "Here is the setup in one sentence.",
+    "This is the part everyone skips.",
+    "And here is why it matters."
+  ],
+  "start": 0,
+  "steps": [
+    {"say": "this is the part everyone skips", "line": 0},
+    {"say": "here is the setup in one sentence", "line": 1},
+    {"say": "okay um so anyway", "line": 1, "held": true},
+    {"say": "this is the part everyone skips", "line": 2},
+    {"say": "and here is why it matters", "line": 3}
+  ]
+}

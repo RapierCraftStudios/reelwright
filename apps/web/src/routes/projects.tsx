@@ -47,6 +47,9 @@ export function ProjectsRoute() {
   return (
     <main>
       <h1>Projects</h1>
+      <nav aria-label="Dashboard">
+        <a href="/approvals">Approvals</a>
+      </nav>
       <form onSubmit={onSubmit} aria-label="New project">
         <label>
           Title
@@ -81,7 +84,9 @@ export function ProjectsRoute() {
           <tbody>
             {projects.map((p) => (
               <tr key={p.id} data-testid="project-row">
-                <td>{p.title}</td>
+                <td>
+                  <a href={`/projects/${p.id}/script`}>{p.title}</a>
+                </td>
                 <td>{p.format}</td>
                 <td>{p.status}</td>
               </tr>

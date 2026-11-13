@@ -31,6 +31,9 @@ export default defineConfig({
     env: {
       REELWRIGHT_DB_URL: process.env.REELWRIGHT_DB_URL,
       REELWRIGHT_WEB_DIST: process.env.REELWRIGHT_WEB_DIST,
+      // Voice follow without a model: the server "reads" the script at one word per 60 ms of audio.
+      REELWRIGHT_PROMPTER_ASR: "mock",
+      REELWRIGHT_PROMPTER_MOCK_MS_PER_WORD: "60",
     },
   },
 });

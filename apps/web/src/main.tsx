@@ -3,7 +3,11 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 
+import "./theme.css";
+import { ApprovalsRoute } from "./routes/approvals";
 import { ProjectsRoute } from "./routes/projects";
+import { PrompterRoute } from "./routes/prompter";
+import { ScriptEditorRoute } from "./routes/script-editor";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("#root element missing");
@@ -13,6 +17,9 @@ createRoot(root).render(
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<ProjectsRoute />} />
+        <Route path="/projects/:id/script" element={<ScriptEditorRoute />} />
+        <Route path="/prompter/:id" element={<PrompterRoute />} />
+        <Route path="/approvals" element={<ApprovalsRoute />} />
       </Routes>
     </BrowserRouter>
   </StrictMode>,

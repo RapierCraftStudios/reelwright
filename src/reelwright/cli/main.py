@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import signal
+import socket
 import threading
 from types import FrameType
 
@@ -13,10 +14,14 @@ from sqlmodel import Session
 
 from reelwright.api.projects import list_projects
 from reelwright.db.session import get_engine, migrate
+from reelwright.render.picker import caps_of
+from reelwright.render.registry import live_workers, utcnow
 
 app = typer.Typer(help="Reelwright: AI-run creator studio.", no_args_is_help=True)
 projects_app = typer.Typer(help="Video projects.", no_args_is_help=True)
 app.add_typer(projects_app, name="projects")
+worker_app = typer.Typer(help="Run a render worker on this machine.", no_args_is_help=True)
+app.add_typer(worker_app, name="worker")
 
 
 @app.command()
@@ -69,6 +74,42 @@ def projects_list() -> None:
         return
     for p in rows:
         typer.echo(f"{p.slug}\t{p.title}\t{p.format.value}\t{p.status}")
+
+
+@app.command("workers")
+def workers_list() -> None:
+    """List live render workers with GPU stats."""
+    migrate()
+    with Session(get_engine()) as session:
+        rows = live_workers(session, utcnow())
+    if not rows:
+        typer.echo("No live workers.")
+        return
+    for w in rows:
+        state = "yield" if w.yielding else "busy" if w.busy else "ready"
+        caps = ",".join(sorted(caps_of(w.capabilities))) or "-"
+        typer.echo(
+            f"{w.name}\t{w.host or '-'}\t{w.gpu_model or 'cpu'}\t"
+            f"{w.vram_free_mb}/{w.vram_total_mb} MB\t{w.utilization_pct}%\t"
+            f"{w.temperature_c}C\t{caps}\t{state}"
+        )
+
+
+@worker_app.command("run")
+def worker_run(
+    server: str = typer.Option(
+        ..., envvar="REELWRIGHT_SERVER", help="API base URL: https:// on the tailnet."
+    ),
+    name: str = typer.Option(socket.gethostname(), help="Worker name (one per card)."),
+    cpu: bool = typer.Option(False, help="CPU fallback worker: same job kinds, no GPU."),
+    interval: float = typer.Option(5.0, help="Seconds between polls when idle."),
+    mem_cap_mb: int | None = typer.Option(None, help="RAM cap per job process, in MB."),
+) -> None:
+    """Heartbeat and pull jobs. The token comes from REELWRIGHT_WORKER_TOKEN."""
+    from reelwright.render.worker import Agent, ResourcePolicy
+
+    agent = Agent(server, name, cpu=cpu, policy=ResourcePolicy(nice=True, mem_cap_mb=mem_cap_mb))
+    agent.run_forever(interval)
 
 
 if __name__ == "__main__":
